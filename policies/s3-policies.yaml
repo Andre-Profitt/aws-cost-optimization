@@ -1,0 +1,395 @@
+# Cloud Custodian policies for S3 cost optimization
+# Automates storage tiering, lifecycle management, and cleanup
+
+policies:
+  # Enable Intelligent-Tiering for large buckets
+  - name: s3-enable-intelligent-tiering-large-buckets
+    resource: s3
+    description: |
+      Enable Intelligent-Tiering for buckets over 1TB that don't have it enabled.
+      This provides automatic cost optimization without performance impact.
+    filters:
+      # Check bucket size
+      - type: metrics
+        name: BucketSizeBytes
+        dimensions:
+          - StorageType: AllStorageTypes
+        value: 1099511627776  # 1TB in bytes
+        op: greater-than
+      # Check if Intelligent-Tiering is not enabled
+      - not:
+        - type: bucket-lifecycle
+          match:
+            - type: value
+              key: Rules[?Status==`Enabled`].Transitions[].StorageClass
+              value: INTELLIGENT_TIERING
+              op: contains
+    actions:
+      - type: configure-lifecycle
+        rules:
+          - ID: IntelligentTieringRule
+            Status: Enabled
+            Transitions:
+              - StorageClass: INTELLIGENT_TIERING
+                Days: 0
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Intelligent-Tiering Enabled"
+        violation_desc: |
+          Enabled Intelligent-Tiering for large bucket to optimize storage costs automatically.
+
+  # Add lifecycle policies to buckets without them
+  - name: s3-add-lifecycle-policy-standard-buckets
+    resource: s3
+    description: |
+      Add standard lifecycle policy to buckets over 10GB without any lifecycle rules.
+      Transitions: Standard -> Standard-IA (30d) -> Glacier IR (90d) -> Deep Archive (180d)
+    filters:
+      # Bucket size over 10GB
+      - type: metrics
+        name: BucketSizeBytes
+        dimensions:
+          - StorageType: AllStorageTypes
+        value: 10737418240  # 10GB
+        op: greater-than
+      # No lifecycle configuration
+      - not:
+        - type: bucket-lifecycle
+      # Not tagged as exempt
+      - not:
+        - tag:NoLifecycle: present
+    actions:
+      - type: configure-lifecycle
+        rules:
+          - ID: StandardLifecyclePolicy
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                Days: 30
+              - StorageClass: GLACIER_IR  
+                Days: 90
+              - StorageClass: DEEP_ARCHIVE
+                Days: 180
+            NoncurrentVersionTransitions:
+              - StorageClass: STANDARD_IA
+                Days: 7
+              - StorageClass: GLACIER
+                Days: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Lifecycle Policy Added"
+        violation_desc: |
+          Added lifecycle policy to transition objects to cheaper storage tiers over time.
+
+  # Cleanup incomplete multipart uploads
+  - name: s3-cleanup-incomplete-multipart-uploads
+    resource: s3
+    description: |
+      Clean up incomplete multipart uploads older than 7 days.
+      These consume storage but serve no purpose.
+    filters:
+      - not:
+        - type: bucket-lifecycle
+          match:
+            - type: value
+              key: Rules[?Status==`Enabled`].AbortIncompleteMultipartUpload.DaysAfterInitiation
+              op: not-null
+    actions:
+      - type: configure-lifecycle
+        rules:
+          - ID: CleanupIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Multipart Upload Cleanup Enabled"
+        violation_desc: "Enabled cleanup of incomplete multipart uploads after 7 days"
+
+  # Delete old versions in versioned buckets
+  - name: s3-manage-versioned-bucket-costs
+    resource: s3
+    description: |
+      Manage costs in versioned buckets by transitioning and eventually
+      deleting old versions.
+    filters:
+      - type: bucket-versioning
+        Versioning: Enabled
+      # Check if version lifecycle exists
+      - not:
+        - type: bucket-lifecycle
+          match:
+            - type: value
+              key: Rules[?Status==`Enabled`].NoncurrentVersionTransitions
+              op: not-null
+    actions:
+      - type: configure-lifecycle
+        rules:
+          - ID: ManageVersionedObjects
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: STANDARD_IA
+                Days: 30
+              - StorageClass: GLACIER
+                Days: 90
+            NoncurrentVersionExpiration:
+              Days: 365  # Delete versions older than 1 year
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Version Management Policy Added"
+        violation_desc: |
+          Added policy to manage old versions in versioned bucket, reducing storage costs.
+
+  # Optimize log buckets
+  - name: s3-optimize-log-storage
+    resource: s3
+    description: |
+      Optimize storage for log buckets by aggressive tiering and deletion.
+      Logs are rarely accessed after initial analysis period.
+    filters:
+      - or:
+        - type: value
+          key: Name
+          value: '.*(-logs?|-logging)$'
+          op: regex
+        - tag:Type: logs
+        - tag:Purpose: logging
+      # No aggressive lifecycle policy
+      - not:
+        - type: bucket-lifecycle
+          match:
+            - type: value
+              key: Rules[?Transitions[?Days<=`7`]].ID
+              op: not-null
+    actions:
+      - type: configure-lifecycle
+        rules:
+          - ID: AggressiveLogArchival
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                Days: 7
+              - StorageClass: GLACIER_IR
+                Days: 30
+              - StorageClass: GLACIER
+                Days: 60
+              - StorageClass: DEEP_ARCHIVE
+                Days: 90
+            Expiration:
+              Days: 365  # Delete logs after 1 year
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Log Storage Optimization"
+        violation_desc: |
+          Applied aggressive storage tiering for log bucket to minimize costs.
+
+  # Tag buckets missing cost allocation tags
+  - name: s3-tag-compliance
+    resource: s3
+    description: |
+      Ensure all S3 buckets have required tags for cost allocation
+    filters:
+      - or:
+        - tag:Environment: absent
+        - tag:Owner: absent
+        - tag:CostCenter: absent
+        - tag:Application: absent
+    actions:
+      - type: tag
+        tags:
+          TagCompliance: non-compliant
+          LastReviewed: "{{ now }}"
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Missing Required Tags"
+        violation_desc: |
+          Bucket missing required tags for cost allocation.
+          Required: Environment, Owner, CostCenter, Application
+
+  # Alert on rapidly growing buckets
+  - name: s3-rapid-growth-alert
+    resource: s3
+    description: |
+      Alert when buckets grow more than 20% in 7 days.
+      Helps catch runaway processes or misconfigurations.
+    filters:
+      - type: metrics
+        name: BucketSizeBytes
+        dimensions:
+          - StorageType: AllStorageTypes
+        days: 7
+        percent-change: 20
+        op: greater-than
+    actions:
+      - type: notify
+        template: default
+        subject: "⚠️ S3 Bucket - Rapid Growth Detected"
+        violation_desc: |
+          Bucket has grown more than 20% in the last 7 days.
+          Current size: {{ bucket_size_gb }} GB
+          This could indicate a runaway process or misconfiguration.
+        to:
+          - resource-owner
+          - security@your-org.com
+
+  # Clean up old backup buckets
+  - name: s3-identify-old-backup-buckets
+    resource: s3
+    description: |
+      Identify backup buckets with data older than retention policy
+    filters:
+      - or:
+        - type: value
+          key: Name
+          value: '.*(backup|bak|archive|snapshot).*'
+          op: regex
+        - tag:Type: backup
+      # Has objects older than 180 days
+      - type: bucket-metrics
+        name: BucketSizeBytes
+        dimensions:
+          - StorageType: StandardStorage
+        value: 1073741824  # 1GB
+        op: greater-than
+      # No deletion lifecycle
+      - not:
+        - type: bucket-lifecycle
+          match:
+            - type: value
+              key: Rules[?Status==`Enabled`].Expiration.Days
+              op: not-null
+    actions:
+      - type: tag
+        tags:
+          ReviewForCleanup: required
+          LastReviewDate: "{{ now }}"
+      - type: notify
+        template: default
+        subject: "S3 Backup Bucket - Review Required"
+        violation_desc: |
+          Backup bucket may contain data beyond retention requirements.
+          Review and implement appropriate lifecycle policy.
+
+  # Optimize development/test bucket storage
+  - name: s3-optimize-non-prod-storage
+    resource: s3
+    description: |
+      Aggressively optimize storage in development and test environments
+    filters:
+      - or:
+        - tag:Environment: dev
+        - tag:Environment: development
+        - tag:Environment: test
+        - tag:Environment: staging
+      # Size over 100GB
+      - type: metrics
+        name: BucketSizeBytes
+        dimensions:
+          - StorageType: AllStorageTypes
+        value: 107374182400  # 100GB
+        op: greater-than
+      # Not already optimized
+      - not:
+        - type: bucket-lifecycle
+          match:
+            - type: value
+              key: Rules[?Transitions[?Days==`1`]].ID
+              op: not-null
+    actions:
+      - type: configure-lifecycle
+        rules:
+          - ID: NonProdAggressive
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                Days: 1
+              - StorageClass: GLACIER_IR
+                Days: 7
+              - StorageClass: GLACIER
+                Days: 30
+            Expiration:
+              Days: 90  # Delete after 90 days in non-prod
+      - type: notify
+        template: default
+        subject: "S3 Non-Prod Bucket - Storage Optimized"
+        violation_desc: |
+          Applied aggressive storage optimization for non-production bucket.
+
+  # Enable S3 Storage Lens recommendations
+  - name: s3-enable-storage-lens
+    resource: account
+    description: |
+      Ensure S3 Storage Lens is enabled for cost visibility
+    filters:
+      - type: s3-storage-lens
+        enabled: false
+    actions:
+      - type: enable-s3-storage-lens
+        config:
+          AccountLevel:
+            BucketLevel:
+              PrefixLevel:
+                StorageMetrics:
+                  SelectionCriteria:
+                    MaxDepth: 3
+          AwsOrg:
+            Arn: "arn:aws:organizations::*:organization/*"
+      - type: notify
+        template: default
+        subject: "S3 Storage Lens Enabled"
+        violation_desc: "Enabled S3 Storage Lens for better cost visibility"
+
+  # Archive empty buckets
+  - name: s3-tag-empty-buckets
+    resource: s3
+    description: |
+      Tag empty buckets for potential deletion
+    filters:
+      - type: metrics
+        name: NumberOfObjects
+        dimensions:
+          - StorageType: AllStorageTypes
+        value: 0
+        op: equal
+      - type: value
+        key: CreationDate
+        value_type: age
+        value: 30
+        op: greater-than
+    actions:
+      - type: tag
+        tags:
+          Status: empty
+          ReviewForDeletion: "true"
+          EmptySince: "{{ now }}"
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Empty for 30+ Days"
+        violation_desc: |
+          Bucket has been empty for over 30 days. Consider deletion to avoid bucket charge.
+
+  # Optimize cross-region replication
+  - name: s3-review-cross-region-replication
+    resource: s3
+    description: |
+      Review cross-region replication for non-critical buckets
+    filters:
+      - type: bucket-replication
+        status: Enabled
+      - or:
+        - tag:Environment: dev
+        - tag:Environment: test
+        - not:
+          - tag:Critical: "true"
+    actions:
+      - type: notify
+        template: default
+        subject: "S3 Bucket - Review Cross-Region Replication"
+        violation_desc: |
+          Non-critical bucket has cross-region replication enabled.
+          This doubles storage costs. Review if replication is necessary.
+        to:
+          - resource-owner
+          - cloud-finance@your-org.com

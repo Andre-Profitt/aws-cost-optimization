@@ -11,6 +11,18 @@ A comprehensive Python automation tool for safely reducing AWS costs without bre
 - **Cost Savings Tracking**: Real-time savings calculations and reporting
 - **Production-Safe**: Gradual shutdown process with multiple safety checkpoints
 
+### New Features (v2.0)
+- **RDS Optimizer**: Identifies idle databases, duplicates, rightsizing opportunities, and Aurora migration candidates
+- **S3 Optimizer**: Intelligent-Tiering automation, lifecycle policies, duplicate detection, and access pattern analysis
+- **Cloud Custodian Policies**: Pre-built policies for S3 cost optimization with automated enforcement
+
+### New Features (v3.0)
+- **Network Optimizer**: NAT Gateway optimization, Elastic IP cleanup, VPC Endpoint recommendations, data transfer analysis
+- **Reserved Instance Analyzer**: RI/Savings Plan recommendations based on usage patterns with ROI calculations
+- **Cost Anomaly Detector**: Real-time anomaly detection using statistical analysis and machine learning
+- **Auto-Remediation Engine**: Automated execution of optimization recommendations with safety controls
+- **Unified Orchestrator**: Comprehensive analysis across all optimization components
+
 ## 📋 Prerequisites
 
 - Python 3.8+
@@ -73,6 +85,24 @@ optimization:
   s3:
     intelligent_tiering_min_size: 1000000000  # 1TB in bytes
 
+  # Reserved Instance Analysis
+  ri_lookback_days: 90
+  ri_minimum_savings: 100  # Minimum monthly savings to recommend
+
+  # Anomaly Detection
+  anomaly_lookback_days: 90
+  anomaly_threshold: 2.5  # Z-score threshold
+  anomaly_alerts_enabled: true
+  anomaly_sns_topic: arn:aws:sns:us-east-1:123456789012:cost-anomalies
+
+  # Auto-Remediation
+  enable_auto_remediation: true
+  remediation_dry_run: true
+  max_auto_remediation_savings: 500  # Max monthly savings to auto-approve
+  business_hours_only: true
+  notification_endpoints:
+    - arn:aws:sns:us-east-1:123456789012:cost-optimization
+
 safety:
   dry_run: true
   snapshot_before_deletion: true
@@ -82,56 +112,98 @@ safety:
 
 ## 🚀 Quick Start
 
-### 1. Run Discovery (Safe - Read Only)
+### 1. Configure the Tool
 ```bash
-# Discover all resources across accounts
-python -m aws_cost_optimizer discover --output-format excel
-
-# Discover with specific resource types
-python -m aws_cost_optimizer discover --resource-types ec2,rds,s3
+# Interactive configuration setup
+python -m aws_cost_optimizer configure
 ```
 
-### 2. Analyze Usage Patterns
+### 2. Run Comprehensive Analysis
 ```bash
-# Analyze resource usage patterns over 90 days
-python -m aws_cost_optimizer analyze --days 90 --detect-periodic
+# Full cost optimization analysis across all services
+python -m aws_cost_optimizer analyze
 
-# Generate optimization recommendations
-python -m aws_cost_optimizer recommend --savings-target 20000
+# Analyze specific regions
+python -m aws_cost_optimizer analyze -r us-east-1 -r us-west-2
+
+# Generate HTML executive report
+python -m aws_cost_optimizer analyze --format html --output cost_report
+
+# Export detailed Excel report
+python -m aws_cost_optimizer analyze --format excel --output detailed_analysis
 ```
 
-### 3. Execute Optimization (With Safety Checks)
+### 3. Quick Scans for Specific Areas
 ```bash
-# Dry run - see what would be changed
-python -m aws_cost_optimizer optimize --dry-run
+# EC2 optimization scan
+python -m aws_cost_optimizer quick-scan --type ec2
 
-# Execute with approval workflow
-python -m aws_cost_optimizer optimize --require-approval
+# Network cost analysis
+python -m aws_cost_optimizer quick-scan --type network
 
-# Execute specific optimizations
-python -m aws_cost_optimizer optimize --actions stop-idle-ec2,enable-s3-tiering
+# Reserved Instance opportunities
+python -m aws_cost_optimizer quick-scan --type ri
+
+# Cost anomaly detection
+python -m aws_cost_optimizer quick-scan --type anomalies
+```
+
+### 4. Auto-Remediation (With Safety Controls)
+```bash
+# Dry run mode - see what would be changed
+python -m aws_cost_optimizer remediate --dry-run
+
+# Execute with auto-approval for low-risk actions
+python -m aws_cost_optimizer remediate --auto-approve
+
+# Full execution mode
+python -m aws_cost_optimizer remediate --execute
+```
+
+### 5. Generate Executive Report
+```bash
+# Generate comprehensive HTML report
+python -m aws_cost_optimizer report --output executive_summary.html
 ```
 
 ## 📊 Example Output
 
 ```
-AWS Cost Optimizer Report
-Generated: 2024-01-15 10:30:00
+🔍 Starting comprehensive cost optimization analysis...
+Analyzing [████████████████████████████████] 100%
 
-Current Monthly Spend: $47,000
-Potential Savings: $22,500 (47.8%)
+💰 Total potential monthly savings: $32,847.50
+📊 Found 147 optimization opportunities
+⚠️  Detected 5 cost anomalies
 
-Quick Wins (Week 1-2):
-- Unattached EBS Volumes: $1,200/month
-- Unused Elastic IPs: $180/month
-- Idle Dev Instances: $3,500/month
+✅ Executive report saved to cost_report.html
 
-Medium-term (Month 1-3):
-- EC2 Rightsizing: $8,000/month
-- RDS Consolidation: $4,500/month
-- S3 Intelligent Tiering: $5,120/month
+Key Findings:
+  💰 Total Monthly Savings: $32,847.50
+  📈 Annual Savings: $394,170.00
+  🎯 Recommendations: 147
+  ⚠️  Anomalies: 5
 
-Total Identified Savings: $22,500/month
+Top Opportunities:
+1. EC2 Optimization: $15,234.00/month
+   - 23 idle instances identified
+   - 45 rightsizing opportunities
+   - 12 instances with low utilization
+
+2. Network Optimization: $8,456.00/month
+   - 5 unused NAT Gateways
+   - 18 unattached Elastic IPs
+   - VPC Endpoint opportunities for S3/DynamoDB
+
+3. Reserved Instance Opportunities: $9,157.50/month
+   - 15 RI recommendations
+   - 3 Savings Plan opportunities
+   - Average ROI: 4.2 months
+
+Cost Anomalies Detected:
+- RDS Production: CRITICAL - 250% increase ($1,200 impact)
+- Lambda Functions: HIGH - Invocation spike detected
+- S3 Transfer: MEDIUM - Inter-region transfer increase
 ```
 
 ## 🏗️ Architecture
@@ -158,7 +230,11 @@ aws-cost-optimizer/
 │       │   ├── ec2_optimizer.py
 │       │   ├── rds_optimizer.py
 │       │   ├── s3_optimizer.py
+│       │   ├── network_optimizer.py
+│       │   ├── reserved_instance_analyzer.py
+│       │   ├── auto_remediation_engine.py
 │       │   └── safety_checks.py
+│       ├── orchestrator.py        # Main orchestration engine
 │       ├── reporting/             # Report generation
 │       │   ├── __init__.py
 │       │   ├── excel_reporter.py
