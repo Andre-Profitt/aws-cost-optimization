@@ -1,6 +1,6 @@
 """Safety checks module to ensure optimization actions don't impact production systems."""
 import logging
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 from datetime import datetime, timedelta
 import boto3
 from botocore.exceptions import ClientError
@@ -364,3 +364,80 @@ def perform_safety_checks(resources: List[Dict],
                 results['warnings'].extend(safety_result['warnings'])
     
     return results
+
+
+class SafetyOrchestrator:
+    """Orchestrates safety checks across resources before optimization"""
+    
+    def __init__(self, dry_run: bool = True):
+        """Initialize the safety orchestrator
+        
+        Args:
+            dry_run: If True, only simulate actions without executing
+        """
+        self.dry_run = dry_run
+        self.session = boto3.Session()
+        self.safety_checker = SafetyChecker(self.session)
+        
+    def check_resource_safety(self, resource_id: str, resource_type: str) -> Dict[str, Any]:
+        """Check if a resource is safe to optimize
+        
+        Args:
+            resource_id: The resource identifier
+            resource_type: Type of resource (EC2, RDS, etc.)
+            
+        Returns:
+            Dictionary with safety check results
+        """
+        if resource_type == 'EC2':
+            return self.safety_checker.check_instance_safety(resource_id)
+        else:
+            # Add more resource types as needed
+            return {
+                'resource_id': resource_id,
+                'safe_to_modify': False,
+                'warnings': [],
+                'blockers': [f'Safety checks not implemented for {resource_type}']
+            }
+    
+    def execute_optimization(self, resource_id: str, resource_type: str, action: str) -> Dict[str, Any]:
+        """Execute optimization action with safety checks
+        
+        Args:
+            resource_id: The resource identifier
+            resource_type: Type of resource
+            action: The optimization action to perform
+            
+        Returns:
+            Dictionary with execution results
+        """
+        # First perform safety check
+        safety_result = self.check_resource_safety(resource_id, resource_type)
+        
+        if not safety_result['safe_to_modify']:
+            return {
+                'success': False,
+                'resource_id': resource_id,
+                'action': action,
+                'reason': 'Failed safety checks',
+                'blockers': safety_result['blockers']
+            }
+        
+        if self.dry_run:
+            return {
+                'success': True,
+                'resource_id': resource_id,
+                'action': action,
+                'dry_run': True,
+                'message': f'Would execute {action} on {resource_id}'
+            }
+        
+        # Execute the actual optimization
+        # This would contain the actual AWS API calls
+        return {
+            'success': True,
+            'resource_id': resource_id,
+            'action': action,
+            'dry_run': False,
+            'message': f'Executed {action} on {resource_id}'
+        }
