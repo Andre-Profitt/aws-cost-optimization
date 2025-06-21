@@ -1,0 +1,1 @@
+"""Analysis module for resource usage patterns and optimization opportunities"""

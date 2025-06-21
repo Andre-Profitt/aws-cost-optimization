@@ -1,0 +1,1 @@
+"""Discovery module for AWS resources across multiple accounts"""
