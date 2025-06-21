@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # Main optimizer service
+  optimizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aws-cost-optimizer:latest
+    container_name: aws-cost-optimizer
+    environment:
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./output:/app/output
+      - ./logs:/app/logs
+      - ~/.aws:/home/optimizer/.aws:ro  # Mount AWS credentials
+    command: ["aws-cost-optimizer", "discover", "--output-format", "excel"]
+    networks:
+      - optimizer-network
+
+  # LocalStack for testing (simulates AWS services locally)
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"  # LocalStack gateway
+      - "4510-4559:4510-4559"  # External service ports
+    environment:
+      - SERVICES=ec2,s3,rds,cloudwatch,iam,sts,sns
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - optimizer-network
+
+  # PostgreSQL for storing historical data
+  postgres:
+    image: postgres:15-alpine
+    container_name: optimizer-db
+    environment:
+      - POSTGRES_DB=cost_optimizer
+      - POSTGRES_USER=optimizer
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-secretpassword}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - optimizer-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U optimizer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: optimizer-cache
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - optimizer-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Grafana for visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: optimizer-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - optimizer-network
+    depends_on:
+      - postgres
+
+  # Development environment with hot-reload
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    image: aws-cost-optimizer:dev
+    container_name: aws-cost-optimizer-dev
+    environment:
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_ENDPOINT_URL=http://localstack:4566  # Use LocalStack
+      - PYTHONPATH=/app/src
+      - FLASK_ENV=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+      - ./config:/app/config:ro
+      - ./output:/app/output
+      - ./logs:/app/logs
+    command: ["python", "-m", "aws_cost_optimizer.cli", "--help"]
+    networks:
+      - optimizer-network
+    depends_on:
+      - localstack
+      - postgres
+      - redis
+
+  # Test runner
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    image: aws-cost-optimizer:test
+    container_name: aws-cost-optimizer-test
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=testing
+      - AWS_SECRET_ACCESS_KEY=testing
+      - PYTHONPATH=/app/src
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+      - ./coverage:/app/coverage
+    command: ["pytest", "-v", "--cov=src/aws_cost_optimizer", "--cov-report=html:/app/coverage"]
+    networks:
+      - optimizer-network
+    depends_on:
+      - localstack
+
+networks:
+  optimizer-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  grafana-data:

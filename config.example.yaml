@@ -1,0 +1,311 @@
+# AWS Cost Optimizer Configuration
+# Copy this file to config.yaml and customize for your environment
+
+# AWS Account Configuration
+aws:
+  # List of AWS accounts to analyze
+  accounts:
+    - id: "123456789012"
+      name: "Production"
+      role_name: "OrganizationAccountAccessRole"
+    - id: "234567890123"
+      name: "Development"
+      role_name: "OrganizationAccountAccessRole"
+    - id: "345678901234"
+      name: "Staging"
+      role_name: "OrganizationAccountAccessRole"
+    - id: "456789012345"
+      name: "TechStartup-Acquired"  # The acquired company account
+      role_name: "OrganizationAccountAccessRole"
+  
+  # Regions to scan (comment out regions you don't use to speed up discovery)
+  regions:
+    - us-east-1
+    - us-west-2
+    - eu-west-1
+    - eu-central-1
+    # - ap-southeast-1
+    # - ap-northeast-1
+    # - us-west-1
+    # - eu-west-2
+    # - ap-south-1
+    # - ca-central-1
+    # - sa-east-1
+    # - ap-southeast-2
+  
+  # Cross-account role configuration
+  cross_account_role: "OrganizationAccountAccessRole"
+  external_id: null  # Set if using external ID for role assumption
+
+# Optimization Thresholds (based on guide recommendations)
+optimization:
+  ec2:
+    # CPU utilization threshold for identifying unused instances
+    cpu_threshold: 10  # % average over observation period
+    
+    # Network I/O threshold for identifying idle instances  
+    network_io_threshold: 5  # MB over observation period
+    
+    # Memory utilization threshold for rightsizing
+    memory_threshold: 20  # % average
+    
+    # Observation period for metrics
+    observation_days: 14
+    
+    # Instance types to exclude from optimization
+    exclude_instance_types:
+      - t2.micro  # Often free tier
+      - t3.micro
+    
+    # Tag-based exclusions
+    exclude_tags:
+      - DoNotOptimize
+      - Critical
+      - AlwaysOn
+  
+  rds:
+    # Database connection threshold for identifying unused databases
+    connection_threshold: 7  # connections over observation period
+    
+    # CPU utilization threshold for RDS instances
+    cpu_threshold: 25  # % for 99% of time
+    
+    # Observation period for RDS metrics
+    observation_days: 60
+    
+    # Exclude specific engine types
+    exclude_engines: []
+      # - aurora-mysql
+      # - aurora-postgresql
+  
+  s3:
+    # Minimum bucket size for Intelligent-Tiering recommendation
+    intelligent_tiering_min_size: 1000000000  # 1TB in bytes
+    
+    # Days without access before considering optimization
+    no_access_days: 90
+    
+    # Lifecycle rule recommendations
+    lifecycle_transitions:
+      standard_ia_days: 30
+      glacier_days: 90
+      deep_archive_days: 180
+
+# Safety Configuration
+safety:
+  # Run in dry-run mode by default
+  dry_run: true
+  
+  # Create snapshots before any deletion
+  snapshot_before_deletion: true
+  
+  # Safety period before permanent deletion
+  safety_period_days: 30
+  
+  # Require manual approval for each optimization
+  require_approval: true
+  
+  # Risk tolerance levels
+  risk_tolerance: "medium"  # low, medium, high
+  
+  # Backup requirements
+  backup:
+    required_age_days: 7  # Require backup within X days
+    cross_region: false   # Require cross-region backup
+  
+  # Pattern detection settings
+  pattern_detection:
+    # Minimum days of data for pattern analysis
+    min_data_days: 30
+    
+    # Confidence threshold for pattern detection
+    confidence_threshold: 0.7
+    
+    # Periodic patterns to detect
+    detect_patterns:
+      - daily
+      - weekly
+      - monthly
+      - quarterly
+
+# Notification Configuration
+notifications:
+  # Email notifications
+  email:
+    enabled: true
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    from_address: "aws-cost-optimizer@your-org.com"
+    to_addresses:
+      - "cloud-team@your-org.com"
+      - "finance@your-org.com"
+    
+    # Email templates
+    templates:
+      discovery_complete: "discovery_complete.html"
+      optimization_summary: "optimization_summary.html"
+      approval_required: "approval_required.html"
+  
+  # Slack notifications
+  slack:
+    enabled: false
+    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+    channel: "#aws-cost-optimization"
+    username: "AWS Cost Optimizer"
+    
+    # Notification triggers
+    notify_on:
+      - discovery_complete
+      - high_savings_found  # > $5000/month
+      - optimization_complete
+      - approval_required
+  
+  # SNS notifications for AWS integration
+  sns:
+    enabled: false
+    topic_arn: "arn:aws:sns:us-east-1:123456789012:cost-optimization"
+
+# Reporting Configuration
+reporting:
+  # Report generation settings
+  output_formats:
+    - excel
+    - html
+    - pdf
+  
+  # Report sections to include
+  sections:
+    - executive_summary
+    - current_spend_analysis
+    - optimization_opportunities
+    - risk_assessment
+    - implementation_timeline
+    - detailed_recommendations
+  
+  # Cost calculation settings
+  cost_calculation:
+    # Include Reserved Instance recommendations
+    include_ri_recommendations: true
+    
+    # Include Savings Plans recommendations
+    include_sp_recommendations: true
+    
+    # Currency for reports
+    currency: "USD"
+    
+    # Cost markup (if applying management fee)
+    markup_percentage: 0
+
+# Scheduling Configuration (for automated runs)
+scheduling:
+  # Discovery schedule (cron format)
+  discovery:
+    enabled: true
+    schedule: "0 2 * * 1"  # Every Monday at 2 AM
+    
+  # Analysis schedule
+  analysis:
+    enabled: true
+    schedule: "0 4 * * 1"  # Every Monday at 4 AM
+    
+  # Report generation schedule
+  reporting:
+    enabled: true
+    schedule: "0 6 * * 1"  # Every Monday at 6 AM
+    
+  # Optimization execution schedule
+  optimization:
+    enabled: false  # Disabled by default for safety
+    schedule: "0 22 * * 5"  # Friday at 10 PM
+    auto_approve: false
+
+# Cloud Custodian Integration
+custodian:
+  # Enable Cloud Custodian policies
+  enabled: true
+  
+  # Policy files to load
+  policy_files:
+    - policies/ec2-policies.yaml
+    - policies/rds-policies.yaml
+    - policies/s3-policies.yaml
+  
+  # Execution mode
+  mode: "pull"  # pull, asg, periodic, lambda
+  
+  # Dry run for policies
+  dry_run: true
+
+# Advanced Settings
+advanced:
+  # Parallel processing
+  max_workers: 10
+  
+  # API rate limiting
+  api_calls_per_second: 10
+  
+  # Retry configuration
+  max_retries: 3
+  retry_backoff_seconds: 5
+  
+  # Cache settings
+  cache:
+    enabled: true
+    ttl_seconds: 3600  # 1 hour
+    
+  # Logging
+  logging:
+    level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+    format: "json"  # json, text
+    file: "logs/aws-cost-optimizer.log"
+    max_size_mb: 100
+    backup_count: 5
+  
+  # Performance tuning
+  performance:
+    # Batch size for API calls
+    batch_size: 50
+    
+    # Timeout for API calls
+    timeout_seconds: 30
+    
+    # Memory limit for data processing
+    max_memory_gb: 4
+
+# Feature Flags
+features:
+  # Enable experimental features
+  experimental_pattern_detection: false
+  ml_based_recommendations: false
+  predictive_cost_modeling: false
+  
+  # Enable specific optimizations
+  enable_ec2_optimization: true
+  enable_rds_optimization: true
+  enable_s3_optimization: true
+  enable_ebs_optimization: true
+  enable_snapshot_cleanup: true
+  enable_elastic_ip_cleanup: true
+  
+  # Integration features
+  enable_cost_explorer_integration: true
+  enable_compute_optimizer_integration: true
+  enable_trusted_advisor_integration: false
+
+# Validation Rules
+validation:
+  # Minimum savings threshold to take action
+  min_savings_threshold: 100  # USD per month
+  
+  # Require specific tags before optimization
+  required_tags_for_optimization:
+    - Environment
+    - Owner
+    
+  # Prohibited actions by environment
+  prohibited_actions:
+    production:
+      - terminate
+      - delete
+    staging:
+      - terminate

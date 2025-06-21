@@ -1,0 +1,261 @@
+name: Daily AWS Resource Discovery
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC (adjust for your timezone)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  AWS_DEFAULT_REGION: us-east-1
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  discovery:
+    name: Run Resource Discovery
+    runs-on: ubuntu-latest
+    # Use OIDC for AWS authentication (more secure than long-lived credentials)
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_DISCOVERY_ROLE_ARN }}
+          role-session-name: GitHubActions-Discovery
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      
+      - name: Run discovery
+        id: discovery
+        run: |
+          echo "Starting AWS resource discovery..."
+          
+          # Create output directory
+          mkdir -p discovery-results
+          
+          # Run discovery
+          aws-cost-optimizer discover \
+            --output-format excel \
+            --output-file discovery-results/inventory-$(date +%Y%m%d).xlsx
+          
+          # Also generate JSON for further processing
+          aws-cost-optimizer discover \
+            --output-format json \
+            --output-file discovery-results/inventory-$(date +%Y%m%d).json
+          
+          # Capture summary
+          echo "DISCOVERY_DATE=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+      
+      - name: Run pattern analysis
+        id: analysis
+        run: |
+          echo "Analyzing usage patterns..."
+          
+          aws-cost-optimizer analyze \
+            --days 90 \
+            --detect-periodic \
+            --input-file discovery-results/inventory-$(date +%Y%m%d).json \
+            --output-file discovery-results/analysis-$(date +%Y%m%d).json
+      
+      - name: Generate recommendations
+        id: recommendations
+        run: |
+          echo "Generating optimization recommendations..."
+          
+          aws-cost-optimizer recommend \
+            --savings-target 20000 \
+            --risk-tolerance medium \
+            --input-file discovery-results/inventory-$(date +%Y%m%d).json \
+            --analysis-file discovery-results/analysis-$(date +%Y%m%d).json \
+            --output-file discovery-results/recommendations-$(date +%Y%m%d).json | tee recommendation-summary.txt
+          
+          # Extract savings for output
+          TOTAL_SAVINGS=$(grep "Total potential savings:" recommendation-summary.txt | grep -oE '\$[0-9,]+\.[0-9]+' | head -1)
+          echo "TOTAL_SAVINGS=$TOTAL_SAVINGS" >> $GITHUB_OUTPUT
+      
+      - name: Upload discovery results
+        uses: actions/upload-artifact@v3
+        with:
+          name: discovery-results-${{ steps.discovery.outputs.DISCOVERY_DATE }}
+          path: discovery-results/
+          retention-days: 90
+      
+      - name: Create summary issue
+        if: success()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const date = '${{ steps.discovery.outputs.DISCOVERY_DATE }}';
+            const savings = '${{ steps.recommendations.outputs.TOTAL_SAVINGS }}';
+            
+            const issueTitle = `💰 Cost Optimization Report - ${date}`;
+            const issueBody = `
+            ## AWS Cost Optimization Discovery Results
+            
+            **Date**: ${date}
+            **Total Potential Monthly Savings**: ${savings}
+            
+            ### 📊 Discovery Summary
+            - Resources discovered across all accounts
+            - Pattern analysis completed (90 days)
+            - Safety assessments performed
+            - Recommendations generated
+            
+            ### 📎 Attachments
+            - [Download Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### 🎯 Next Steps
+            1. Review the detailed recommendations
+            2. Validate findings with application owners
+            3. Create implementation plan
+            4. Execute optimizations in phases
+            
+            ### ⚠️ Safety Notes
+            - All recommendations include safety assessments
+            - Periodic patterns have been detected and excluded
+            - High-risk resources have been flagged
+            
+            ---
+            *This report was automatically generated by the AWS Cost Optimizer*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: ['cost-optimization', 'automated-report']
+            });
+      
+      - name: Send Slack notification
+        if: success() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          SAVINGS="${{ steps.recommendations.outputs.TOTAL_SAVINGS }}"
+          DATE="${{ steps.discovery.outputs.DISCOVERY_DATE }}"
+          
+          curl -X POST $SLACK_WEBHOOK_URL \
+            -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"💰 AWS Cost Optimization Report - ${DATE}\",
+              \"blocks\": [
+                {
+                  \"type\": \"header\",
+                  \"text\": {
+                    \"type\": \"plain_text\",
+                    \"text\": \"AWS Cost Optimization Report\"
+                  }
+                },
+                {
+                  \"type\": \"section\",
+                  \"fields\": [
+                    {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*Date:*\n${DATE}\"
+                    },
+                    {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*Potential Savings:*\n${SAVINGS}/month\"
+                    }
+                  ]
+                },
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"View the full report: <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions>\"
+                  }
+                }
+              ]
+            }"
+      
+      - name: Error notification
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '❌ Cost Optimization Discovery Failed',
+              body: `The automated discovery workflow failed. Please check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`,
+              labels: ['bug', 'cost-optimization']
+            });
+
+  validate:
+    name: Validate Recommendations
+    needs: discovery
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Download discovery results
+        uses: actions/download-artifact@v3
+        with:
+          name: discovery-results-${{ needs.discovery.outputs.DISCOVERY_DATE }}
+          path: discovery-results/
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      
+      - name: Validate recommendations
+        run: |
+          echo "Validating optimization recommendations..."
+          
+          # Run validation checks
+          python -m scripts.validate_recommendations \
+            --recommendations-file discovery-results/recommendations-$(date +%Y%m%d).json \
+            --max-risk medium \
+            --min-confidence 0.7
+      
+      - name: Generate safety report
+        run: |
+          echo "Generating safety assessment report..."
+          
+          python -m scripts.generate_safety_report \
+            --input-file discovery-results/recommendations-$(date +%Y%m%d).json \
+            --output-file discovery-results/safety-report-$(date +%Y%m%d).html

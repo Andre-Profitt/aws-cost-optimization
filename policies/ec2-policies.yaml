@@ -1,0 +1,238 @@
+# Cloud Custodian policies for EC2 cost optimization
+# Based on thresholds from the cost optimization guide
+
+policies:
+  # Stop idle development instances during off-hours
+  - name: ec2-stop-idle-dev-instances-off-hours
+    resource: ec2
+    description: |
+      Stop development/test instances during off-hours (7PM-7AM weekdays, weekends)
+      to save costs. Instances are tagged with Environment=dev/test/staging.
+    filters:
+      - type: instance-state
+        name: running
+      - or:
+        - tag:Environment: dev
+        - tag:Environment: test
+        - tag:Environment: staging
+      - type: offhour
+        default_tz: America/New_York
+        offhour: 19  # 7 PM
+        onhour: 7    # 7 AM
+        weekends: true
+    actions:
+      - type: stop
+      - type: notify
+        template: default
+        subject: "EC2 Instance Stopped - Off Hours"
+        violation_desc: "Development instance stopped during off-hours"
+        to:
+          - resource-owner
+          - aws-cost-optimizer@your-org.com
+
+  # Identify unused instances (CPU < 10% for 14 days)
+  - name: ec2-mark-unused-instances
+    resource: ec2
+    description: |
+      Mark EC2 instances with CPU utilization < 10% average over 14 days
+      as candidates for termination (guide threshold).
+    filters:
+      - type: instance-state
+        name: running
+      - type: metrics
+        name: CPUUtilization
+        namespace: AWS/EC2
+        statistic: Average
+        days: 14
+        value: 10
+        op: less-than
+      - type: metrics
+        name: NetworkIn
+        namespace: AWS/EC2
+        statistic: Sum
+        days: 14
+        value: 5242880  # 5MB in bytes
+        op: less-than
+      - not:
+        - tag:DoNotOptimize: present
+    actions:
+      - type: mark-for-op
+        tag: c7n-ec2-unused
+        msg: "Instance unused - CPU<10%, Network<5MB over 14 days"
+        days: 7  # Give 7 days before action
+      - type: notify
+        template: default
+        subject: "EC2 Instance Marked as Unused"
+        violation_desc: |
+          Instance has CPU < 10% and Network I/O < 5MB over 14 days.
+          Will be stopped in 7 days if not addressed.
+
+  # Stop long-running unused instances
+  - name: ec2-stop-marked-unused
+    resource: ec2
+    description: |
+      Stop instances that have been marked as unused for 7 days
+    filters:
+      - type: instance-state
+        name: running
+      - type: marked-for-op
+        tag: c7n-ec2-unused
+        skew: 7
+    actions:
+      - type: snapshot
+        description: "Final snapshot before stopping unused instance"
+      - type: stop
+      - type: tag
+        tags:
+          StoppedBy: CloudCustodian
+          StoppedReason: "Unused - CPU<10% for 14+ days"
+          StoppedDate: "{{ now }}"
+      - type: notify
+        template: default
+        subject: "EC2 Instance Stopped - Unused"
+        violation_desc: "Instance stopped due to low utilization"
+
+  # Terminate stopped instances older than 90 days
+  - name: ec2-terminate-old-stopped
+    resource: ec2
+    description: |
+      Terminate instances that have been stopped for more than 90 days
+    filters:
+      - type: instance-state
+        name: stopped
+      - type: state-age
+        days: 90
+      - not:
+        - tag:DoNotDelete: present
+      - not:
+        - tag:Backup: required
+    actions:
+      - type: terminate
+        force: true
+      - type: notify
+        template: default
+        subject: "EC2 Instance Terminated - Long Stopped"
+        violation_desc: "Instance terminated after being stopped for 90+ days"
+
+  # Identify over-provisioned instances
+  - name: ec2-identify-overprovisioned
+    resource: ec2
+    description: |
+      Identify instances with CPU < 40% that could be rightsized
+    filters:
+      - type: instance-state
+        name: running
+      - type: metrics
+        name: CPUUtilization
+        namespace: AWS/EC2
+        statistic: Average
+        days: 14
+        value: 40
+        op: less-than
+      - not:
+        - tag:Rightsizing: evaluated
+      # Exclude small instances already
+      - type: instance
+        key: InstanceType
+        value: [t2.micro, t3.micro, t2.small, t3.small]
+        op: not-in
+    actions:
+      - type: tag
+        tags:
+          RightsizingCandidate: true
+          AverageCPU: "{{ metrics.CPUUtilization.Average }}"
+          EvaluationDate: "{{ now }}"
+      - type: notify
+        template: default
+        subject: "EC2 Instance - Rightsizing Opportunity"
+        violation_desc: |
+          Instance CPU < 40% average. Consider rightsizing to save costs.
+
+  # Delete unattached EBS volumes
+  - name: ebs-delete-unattached-volumes
+    resource: ebs
+    description: |
+      Delete EBS volumes that have been unattached for 30 days
+    filters:
+      - Attachments: []
+      - type: age
+        days: 30
+      - not:
+        - tag:DoNotDelete: present
+    actions:
+      - type: snapshot
+        description: "Snapshot before deleting unattached volume"
+      - delete
+      - type: notify
+        template: default
+        subject: "EBS Volume Deleted - Unattached"
+        violation_desc: "Volume deleted after being unattached for 30 days"
+
+  # Release unassociated Elastic IPs
+  - name: ec2-release-unassociated-eips
+    resource: elastic-ip
+    description: |
+      Release Elastic IPs that are not associated with any instance
+    filters:
+      - AssociationId: absent
+      - type: age
+        days: 7
+    actions:
+      - release
+      - type: notify
+        template: default
+        subject: "Elastic IP Released - Unassociated"
+        violation_desc: "Elastic IP released after 7 days unassociated"
+
+  # Tag instances missing required tags
+  - name: ec2-tag-compliance
+    resource: ec2
+    description: |
+      Ensure all instances have required tags for cost allocation
+    filters:
+      - or:
+        - tag:Environment: absent
+        - tag:Owner: absent
+        - tag:CostCenter: absent
+        - tag:Project: absent
+    actions:
+      - type: tag
+        tags:
+          TagCompliance: non-compliant
+          MissingTags: "Environment,Owner,CostCenter,Project"
+      - type: notify
+        template: default
+        subject: "EC2 Instance - Missing Required Tags"
+        violation_desc: |
+          Instance missing required tags for cost allocation.
+          Please add: Environment, Owner, CostCenter, Project
+
+  # Notify about instances running 24/7 that could be scheduled
+  - name: ec2-identify-scheduling-candidates
+    resource: ec2
+    description: |
+      Identify non-production instances running 24/7 that could use scheduling
+    filters:
+      - type: instance-state
+        name: running
+      - type: instance-age
+        days: 30
+      - or:
+        - tag:Environment: dev
+        - tag:Environment: test
+        - tag:Environment: staging
+      - not:
+        - tag:Schedule: present
+      - not:
+        - tag:24x7Required: true
+    actions:
+      - type: tag
+        tags:
+          SchedulingCandidate: true
+          PotentialSavings: "65%"  # Business hours only
+      - type: notify
+        template: default
+        subject: "EC2 Instance - Scheduling Opportunity"
+        violation_desc: |
+          Non-production instance running 24/7. 
+          Consider implementing start/stop schedule to save ~65% costs.
