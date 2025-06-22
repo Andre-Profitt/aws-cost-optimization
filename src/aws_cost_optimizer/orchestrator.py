@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Import all optimization components
 from .optimization.ec2_optimizer import EC2Optimizer
 from .optimization.network_optimizer import NetworkOptimizer
+from .optimization.s3_optimizer import S3Optimizer
 from .optimization.reserved_instance_analyzer import ReservedInstanceAnalyzer
 from .optimization.auto_remediation_engine import (
     AutoRemediationEngine, RemediationPolicy, RemediationAction
@@ -21,6 +22,8 @@ from .optimization.auto_remediation_engine import (
 from .analysis.cost_anomaly_detector import CostAnomalyDetector
 from .analysis.pattern_detector import PatternDetector
 from .discovery.multi_account import MultiAccountDiscovery
+from .discovery.s3_discovery import S3Discovery
+from .reporting.excel_reporter import ExcelReporter
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,7 @@ class OptimizationResult:
     total_annual_savings: float
     ec2_savings: float
     network_savings: float
+    s3_savings: float
     ri_savings: float
     anomalies_detected: int
     recommendations_count: int
@@ -58,6 +62,12 @@ class CostOptimizationOrchestrator:
         # Initialize components
         self.ec2_optimizer = EC2Optimizer(session=self.session)
         self.network_optimizer = NetworkOptimizer(session=self.session)
+        self.s3_optimizer = S3Optimizer(
+            session=self.session,
+            size_threshold_gb=self.config.get('s3_size_threshold_gb', 1024),
+            observation_days=self.config.get('s3_observation_days', 90)
+        )
+        self.s3_discovery = S3Discovery(session=self.session)
         self.ri_analyzer = ReservedInstanceAnalyzer(
             session=self.session,
             lookback_days=self.config.get('ri_lookback_days', 90)
@@ -68,6 +78,7 @@ class CostOptimizationOrchestrator:
             anomaly_threshold=self.config.get('anomaly_threshold', 2.5)
         )
         self.pattern_detector = PatternDetector(session=self.session)
+        self.excel_reporter = ExcelReporter()
         
         # Initialize auto-remediation if enabled
         self.auto_remediation = None

@@ -20,6 +20,7 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -27,6 +28,8 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -47,7 +50,6 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
-cover/
 
 # Translations
 *.mo
@@ -70,7 +72,6 @@ instance/
 docs/_build/
 
 # PyBuilder
-.pybuilder/
 target/
 
 # Jupyter Notebook
@@ -84,15 +85,13 @@ ipython_config.py
 .python-version
 
 # pipenv
-Pipfile.lock
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
 
-# poetry
-poetry.lock
-
-# pdm
-.pdm.toml
-
-# PEP 582
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
 __pypackages__/
 
 # Celery stuff
@@ -129,43 +128,12 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Project specific
+# Custom
 config/config.yaml
-reports/
-logs/
-.cache/
 *.xlsx
 *.csv
-aws_inventory_*.json
-cost_optimization_report_*
-recommendations_*.json
-
-# AWS credentials
-.aws/
-aws_credentials
-
-# Temporary files
-*.tmp
-*.bak
-*.old
-
-# Local development
-.local/
-.localstack/
+aws-cost-optimizer.log
+.DS_Store
+.idea/
+.vscode/
+cache/

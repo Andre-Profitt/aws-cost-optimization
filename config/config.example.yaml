@@ -1,227 +1,136 @@
 # AWS Cost Optimizer Configuration
-# Copy this file to config.yaml and update with your values
 
 aws:
-  # AWS accounts to scan for cost optimization
-  accounts:
-    - id: "123456789012"
-      name: "production"
-      role_name: "OrganizationAccountAccessRole"
-      external_id: null  # Optional external ID for role assumption
-    
-    - id: "234567890123"
-      name: "development"
-      role_name: "OrganizationAccountAccessRole"
-      external_id: null
-    
-    - id: "345678901234"
-      name: "staging"
-      role_name: "OrganizationAccountAccessRole"
-      external_id: null
-    
-    - id: "456789012345"
-      name: "sandbox"
-      role_name: "OrganizationAccountAccessRole"
-      external_id: null
-  
-  # AWS regions to scan
+  # List of regions to analyze (leave empty to analyze all regions)
   regions:
     - us-east-1
-    - us-west-1
     - us-west-2
-    - eu-west-1
-    - eu-central-1
-    - ap-southeast-1
-    - ap-northeast-1
+    # - eu-west-1
+    # - ap-southeast-1
+  
+  # AWS profile to use (optional)
+  profile: default
+  
+  # Cross-account role name (for multi-account setups)
+  cross_account_role: OrganizationCostOptimizerRole
 
-# Resource-specific optimization settings
 optimization:
+  # EC2 optimization settings
   ec2:
-    # CPU threshold - instances below this are considered idle
-    cpu_threshold: 10
+    cpu_threshold: 10        # CPU % threshold for idle detection
+    memory_threshold: 20     # Memory % threshold (if available)
+    network_threshold: 5     # Network MB/day threshold
+    observation_days: 14     # Days to look back for metrics
     
-    # Network I/O threshold in MB - instances below this are considered idle
-    network_io_threshold: 5
-    
-    # Memory threshold percentage for rightsizing
-    memory_threshold: 20
-    
-    # Number of days to observe before making recommendations
-    observation_days: 14
-    
-    # Instance types to exclude from optimization
-    exclude_instance_types:
+    # Instance types to exclude from analysis
+    excluded_instance_types:
       - t2.nano
       - t2.micro
     
-    # Tags that prevent optimization
-    protected_tags:
-      - Key: "DoNotOptimize"
-        Value: "true"
-      - Key: "Environment"
-        Value: "production-critical"
+    # Rightsizing settings
+    rightsizing:
+      enabled: true
+      cpu_p95_threshold: 60  # P95 CPU % for rightsizing
+      minimum_savings: 50    # Minimum monthly savings to recommend
   
-  rds:
-    # Connection count threshold
-    connection_threshold: 7
+  # EBS optimization settings
+  ebs:
+    unattached_days: 30      # Days before flagging unattached volumes
+    snapshot_age_days: 30    # Consider snapshots older than this
     
-    # CPU utilization threshold
-    cpu_threshold: 25
-    
-    # Days to analyze for patterns
-    observation_days: 60
-    
-    # Minimum age in days before considering optimization
-    minimum_age_days: 30
-    
-    # Exclude certain engine types
-    exclude_engines:
-      - aurora-mysql
-      - aurora-postgresql
-  
+  # S3 optimization settings
   s3:
-    # Minimum size in bytes for Intelligent-Tiering (1TB)
-    intelligent_tiering_min_size: 1099511627776
+    # Storage class transitions (days)
+    standard_to_ia_days: 30
+    ia_to_glacier_days: 90
+    glacier_to_deep_archive_days: 180
     
-    # Days without access before considering glacier
-    glacier_threshold_days: 90
+    # Minimum object size for storage class recommendations (MB)
+    min_object_size_mb: 128
     
-    # Lifecycle rule settings
-    lifecycle:
-      transition_to_ia_days: 30
-      transition_to_glacier_days: 90
-      transition_to_deep_archive_days: 180
-      delete_incomplete_multipart_days: 7
+    # Lifecycle policy settings
+    enable_lifecycle_recommendations: true
+    
+  # RDS optimization settings
+  rds:
+    cpu_threshold: 10
+    connection_threshold: 5
+    storage_threshold: 20    # % of allocated storage used
 
-# Safety and compliance settings
+# Safety settings
 safety:
-  # Run in dry-run mode by default
+  # Always run in dry-run mode first
   dry_run: true
-  
-  # Create snapshots before any deletion
-  snapshot_before_deletion: true
-  
-  # Days to wait before permanent deletion
-  safety_period_days: 30
   
   # Require manual approval for changes
   require_approval: true
   
-  # Maximum resources to optimize in a single run
-  max_resources_per_run: 50
+  # Tags that mark resources as protected
+  protected_tags:
+    - DoNotOptimize
+    - Production
+    - Critical
   
-  # Gradual rollout percentage
-  rollout_percentage: 10
+  # Environments considered safe for automated changes
+  safe_environments:
+    - dev
+    - development
+    - test
+    - testing
+    - qa
+    - staging
   
-  # Risk tolerance (low, medium, high)
-  risk_tolerance: medium
+  # Minimum age (days) before optimizing a resource
+  minimum_resource_age: 7
+
+# Reporting settings
+reporting:
+  # Output format: json, csv, excel, html
+  default_format: excel
+  
+  # Include detailed metrics in reports
+  include_metrics: true
+  
+  # Email settings (optional)
+  email:
+    enabled: false
+    smtp_host: smtp.gmail.com
+    smtp_port: 587
+    from_address: aws-optimizer@company.com
+    to_addresses:
+      - devops@company.com
+      - finance@company.com
 
 # Notification settings
 notifications:
-  # SNS topic for alerts
-  sns_topic_arn: "arn:aws:sns:us-east-1:123456789012:cost-optimization-alerts"
-  
-  # Email notifications
-  email:
-    enabled: true
-    recipients:
-      - devops@example.com
-      - finance@example.com
-    
-    # Send daily summary
-    daily_summary: true
-    
-    # Alert on savings opportunities over this amount
-    savings_threshold: 1000
-  
-  # Slack integration
+  # Slack webhook (optional)
   slack:
     enabled: false
-    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+    webhook_url: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
     channel: "#aws-cost-optimization"
     
-    # Notification levels
-    notify_on:
-      - high_savings_found
-      - optimization_completed
-      - errors
-
-# Reporting configuration
-reporting:
-  # Output directory for reports
-  output_dir: "./reports"
-  
-  # Report formats
-  formats:
-    - excel
-    - html
-    - json
-  
-  # Include detailed recommendations
-  include_recommendations: true
-  
-  # Historical data retention days
-  retention_days: 90
+  # SNS topic (optional)
+  sns:
+    enabled: false
+    topic_arn: arn:aws:sns:us-east-1:123456789012:cost-optimization
 
 # Advanced settings
 advanced:
-  # Parallel processing
-  max_workers: 10
+  # Number of parallel workers
+  parallel_workers: 10
   
   # API rate limiting (requests per second)
-  api_rate_limit: 10
-  
-  # Retry configuration
-  max_retries: 3
-  retry_delay_seconds: 5
+  rate_limit: 10
   
   # Cache settings
   cache:
     enabled: true
-    ttl_seconds: 3600
-    directory: "./.cache"
+    ttl_hours: 24
+    directory: ~/.aws-cost-optimizer/cache
   
-  # Custom pricing overrides
-  pricing_overrides:
-    # Override specific instance type pricing
-    # instance_types:
-    #   t3.micro: 0.0104
-
-# Logging configuration
-logging:
-  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  
-  # Log file settings
-  file:
-    enabled: true
-    path: "./logs/aws-cost-optimizer.log"
+  # Logging
+  logging:
+    level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    file: aws-cost-optimizer.log
     max_size_mb: 100
     backup_count: 5
-  
-  # Console output
-  console:
-    enabled: true
-    colorize: true
-  
-  # CloudWatch Logs integration
-  cloudwatch:
-    enabled: false
-    log_group: "/aws/cost-optimizer"
-    log_stream: "optimizer-{date}"
-
-# Feature flags
-features:
-  # Enable pattern detection for batch jobs
-  pattern_detection: true
-  
-  # Enable dependency checking
-  dependency_checking: true
-  
-  # Enable cost anomaly detection
-  anomaly_detection: true
-  
-  # Enable predictive analysis
-  predictive_analysis: false
-  
-  # Enable automated remediation
-  auto_remediation: false

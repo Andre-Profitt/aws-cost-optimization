@@ -14,6 +14,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
 
+from ..discovery.s3_discovery import S3Discovery
+
 logger = logging.getLogger(__name__)
 
 @dataclass
