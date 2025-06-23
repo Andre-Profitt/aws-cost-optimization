@@ -7,3 +7,17 @@ from .pattern_detector import (
     WorkloadType,
     UsagePhase
 )
+from .s3_access_analyzer import (
+    S3AccessAnalyzer,
+    integrate_with_s3_optimizer
+)
+
+__all__ = [
+    'PatternDetector',
+    'ResourcePattern',
+    'WorkloadCharacteristics',
+    'WorkloadType',
+    'UsagePhase',
+    'S3AccessAnalyzer',
+    'integrate_with_s3_optimizer'
+]

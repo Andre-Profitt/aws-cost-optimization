@@ -221,5 +221,30 @@ python -m aws_cost_optimizer enterprise-report --days 30
 python examples/enterprise_example.py --schedule --cron "0 9 * * 1"
 ```
 
+### Multi-Account Optimization Commands
+
+```bash
+# Discover resources across multiple AWS accounts
+python -m aws_cost_optimizer multi-account-inventory -a config/accounts_config_template.json -o inventory.xlsx
+
+# Generate emergency cost reduction plan
+python -m aws_cost_optimizer generate-cost-reduction-plan -i inventory.json -r recommendations.json -t 20000
+
+# Run TechStartup optimization scenario
+python -m aws_cost_optimizer techstartup-optimize -a accounts.json -o results/
+
+# Analyze S3 bucket access patterns
+python -m aws_cost_optimizer analyze-s3-access -d 90 -o unused_buckets.json
+```
+
+### TechStartup Solution (Practice Scenario)
+
+The project includes a complete solution for the TechStartup acquisition scenario:
+- **Problem**: $47K/month AWS spend with no documentation
+- **Target**: Find $20K/month in savings
+- **Solution**: Multi-account discovery, analysis, and emergency cost reduction
+
+See `docs/TECHSTARTUP_SOLUTION.md` for the complete guide.
+
 See the full documentation in the `docs/` directory for detailed usage instructions.
 For enterprise features, see `docs/ENTERPRISE_FEATURES.md`.

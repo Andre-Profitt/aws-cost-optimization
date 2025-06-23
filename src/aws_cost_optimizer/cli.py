@@ -470,5 +470,154 @@ def configure(ctx):
     
     click.echo(f"\n✅ Configuration saved to {config_path}")
 
+@cli.command()
+@click.option('--accounts-file', '-a', required=True, help='JSON file with AWS account details')
+@click.option('--output', '-o', default='techstartup_inventory.xlsx', help='Output Excel file')
+@click.option('--regions', '-r', multiple=True, help='AWS regions to scan')
+@click.pass_context
+def multi_account_inventory(ctx, accounts_file, output, regions):
+    """Run multi-account inventory discovery"""
+    from .multi_account import MultiAccountInventory
+    
+    click.echo("🔍 Running multi-account inventory discovery...")
+    
+    # Load accounts configuration
+    with open(accounts_file, 'r') as f:
+        accounts = json.load(f)
+    
+    click.echo(f"📊 Scanning {len(accounts)} AWS accounts...")
+    
+    # Create inventory scanner
+    scanner = MultiAccountInventory(
+        accounts=accounts,
+        regions=list(regions) if regions else None
+    )
+    
+    # Discover all resources
+    with click.progressbar(length=100, label='Discovering resources') as bar:
+        bar.update(10)
+        inventory = scanner.discover_all_resources()
+        bar.update(70)
+        summary = scanner.generate_summary_report()
+        bar.update(20)
+    
+    # Export to Excel
+    scanner.export_to_excel(output)
+    
+    # Show summary
+    click.echo(f"\n✅ Inventory complete!")
+    click.echo(f"📊 Found {summary['ec2_summary']['total_instances']} EC2 instances")
+    click.echo(f"🗄️  Found {summary['rds_summary']['total_databases']} RDS databases")
+    click.echo(f"🪣 Found {summary['s3_summary']['total_storage_tb']:.2f} TB in S3")
+    click.echo(f"💰 Total monthly cost: ${summary['cost_summary']['total_monthly_cost']:,.2f}")
+    click.echo(f"\n📄 Results saved to {output}")
+
+
+@cli.command()
+@click.option('--inventory-file', '-i', required=True, help='Inventory JSON file')
+@click.option('--recommendations-file', '-r', required=True, help='Recommendations JSON file')
+@click.option('--target-savings', '-t', default=20000, help='Target monthly savings')
+@click.option('--output', '-o', default='emergency_cost_reduction_plan.xlsx', help='Output Excel file')
+@click.pass_context
+def generate_cost_reduction_plan(ctx, inventory_file, recommendations_file, target_savings, output):
+    """Generate emergency cost reduction plan"""
+    from .multi_account import EmergencyCostReducer
+    
+    click.echo(f"🚨 Generating emergency cost reduction plan (Target: ${target_savings:,.0f}/month)...")
+    
+    # Load data
+    with open(inventory_file, 'r') as f:
+        inventory = json.load(f)
+    
+    with open(recommendations_file, 'r') as f:
+        recommendations = json.load(f)
+    
+    # Create cost reducer
+    reducer = EmergencyCostReducer(target_savings=target_savings)
+    
+    # Generate plan
+    plan = reducer.create_emergency_plan(recommendations)
+    
+    # Export outputs
+    reducer.export_plan_to_excel(plan, output)
+    
+    # Generate implementation script
+    script_file = output.replace('.xlsx', '_implementation.sh')
+    reducer.generate_implementation_script(plan, script_file)
+    
+    # Show summary
+    click.echo(f"\n✅ Emergency plan generated!")
+    click.echo(f"💰 Target Savings: ${target_savings:,.0f}/month")
+    click.echo(f"📊 Identified Savings: ${plan['total_identified_savings']:,.0f}/month")
+    click.echo(f"🎯 Target Achievement: {plan['savings_achieved_percentage']:.0f}%")
+    click.echo(f"\n📄 Excel report: {output}")
+    click.echo(f"🔧 Implementation script: {script_file}")
+
+
+@cli.command()
+@click.option('--accounts-file', '-a', default='accounts.json', help='JSON file with AWS accounts')
+@click.option('--output-dir', '-o', default='optimization_results', help='Output directory')
+@click.option('--target-savings', '-t', default=20000, help='Target monthly savings')
+@click.pass_context
+def techstartup_optimize(ctx, accounts_file, output_dir, target_savings):
+    """Run TechStartup AWS cost optimization analysis"""
+    click.echo("🚀 Running TechStartup cost optimization analysis...")
+    click.echo(f"   Current spend: $47,000/month")
+    click.echo(f"   Target savings: ${target_savings:,.0f}/month")
+    
+    # Import and run the main orchestration script
+    import subprocess
+    import sys
+    
+    script_path = Path(__file__).parent.parent.parent / 'scripts' / 'techstartup_main.py'
+    
+    if script_path.exists():
+        subprocess.run([
+            sys.executable, str(script_path),
+            '--accounts-file', accounts_file,
+            '--output-dir', output_dir,
+            '--target-savings', str(target_savings)
+        ])
+    else:
+        click.echo(f"❌ Script not found: {script_path}", err=True)
+        click.echo("Please ensure techstartup_main.py is in the scripts directory.")
+
+
+@cli.command()
+@click.option('--bucket-names', '-b', multiple=True, help='Specific buckets to analyze')
+@click.option('--no-access-days', '-d', default=90, help='Days threshold for unused detection')
+@click.option('--output', '-o', default='s3_access_report.json', help='Output file')
+@click.pass_context
+def analyze_s3_access(ctx, bucket_names, no_access_days, output):
+    """Analyze S3 bucket access patterns to find unused buckets"""
+    from .analysis.s3_access_analyzer import S3AccessAnalyzer
+    
+    click.echo(f"🪣 Analyzing S3 bucket access patterns (threshold: {no_access_days} days)...")
+    
+    # Create analyzer
+    analyzer = S3AccessAnalyzer(no_access_days=no_access_days)
+    
+    # Analyze buckets
+    bucket_list = list(bucket_names) if bucket_names else None
+    
+    with click.progressbar(length=100, label='Analyzing buckets') as bar:
+        bar.update(10)
+        results = analyzer.analyze_all_buckets(bucket_list)
+        bar.update(60)
+        report = analyzer.generate_unused_buckets_report(results)
+        bar.update(30)
+    
+    # Save report
+    with open(output, 'w') as f:
+        json.dump(report, f, indent=2, default=str)
+    
+    # Show summary
+    click.echo(f"\n✅ Analysis complete!")
+    click.echo(f"📊 Total buckets analyzed: {report['summary']['total_buckets_analyzed']}")
+    click.echo(f"🗑️  Unused buckets found: {report['summary']['unused_buckets_count']}")
+    click.echo(f"📈 Unused percentage: {report['summary']['unused_percentage']:.1f}%")
+    click.echo(f"\n📄 Report saved to {output}")
+
+
 if __name__ == '__main__':
     cli(obj={})

@@ -17,8 +17,11 @@ from .optimization.safety_checks import SafetyChecker, SafetyOrchestrator
 
 from .analysis.pattern_detector import PatternDetector, ResourcePattern, WorkloadCharacteristics, WorkloadType, UsagePhase
 from .analysis.cost_anomaly_detector import CostAnomalyDetector, CostAnomaly, CostTrend
+from .analysis.s3_access_analyzer import S3AccessAnalyzer, integrate_with_s3_optimizer
 
 from .discovery.multi_account import MultiAccountInventory, AWSAccount
+
+from .multi_account import MultiAccountInventory as MAInventory, EmergencyCostReducer
 
 from .compliance import (
     ComplianceManager,
@@ -76,10 +79,16 @@ __all__ = [
     'CostAnomalyDetector',
     'CostAnomaly',
     'CostTrend',
+    'S3AccessAnalyzer',
+    'integrate_with_s3_optimizer',
     
     # Discovery
     'MultiAccountInventory',
     'AWSAccount',
+    
+    # Multi-Account
+    'MAInventory',
+    'EmergencyCostReducer',
     
     # Compliance
     'ComplianceManager',
