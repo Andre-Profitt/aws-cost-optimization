@@ -237,6 +237,53 @@ python -m aws_cost_optimizer techstartup-optimize -a accounts.json -o results/
 python -m aws_cost_optimizer analyze-s3-access -d 90 -o unused_buckets.json
 ```
 
+### New Advanced Features (v2.0)
+
+#### 🔄 Periodic Resource Detection
+```bash
+# Detect resources with periodic usage patterns (monthly batch jobs, etc.)
+python -m aws_cost_optimizer detect-periodic-resources -d 365 -o periodic_analysis.xlsx
+
+# Analyze specific resources
+python -m aws_cost_optimizer detect-periodic-resources -r resources.json -o analysis.xlsx
+```
+
+#### 🤖 ML-Based Cost Prediction
+```bash
+# Train ML models and predict future costs
+python -m aws_cost_optimizer predict-costs --train -f 30 -b my-ml-bucket
+
+# Predict using existing models
+python -m aws_cost_optimizer predict-costs -f 30 -o predictions.json
+```
+
+#### ⚡ Real-time Cost Controls
+```bash
+# Set up real-time monitoring with circuit breakers
+python -m aws_cost_optimizer setup-realtime-controls --setup-eventbridge
+
+# Use custom threshold configuration
+python -m aws_cost_optimizer setup-realtime-controls -c config/thresholds.yaml
+```
+
+#### 🏷️ Intelligent Tagging
+```bash
+# Analyze and suggest tags using ML
+python -m aws_cost_optimizer intelligent-tagging --train-ml -o tagging_report.json
+
+# Enforce tagging policies
+python -m aws_cost_optimizer intelligent-tagging --enforce -r resources.json
+```
+
+#### 💰 Savings Tracking
+```bash
+# Track optimization savings and compare projected vs actual
+python -m aws_cost_optimizer track-savings -p 30 --update-actuals
+
+# Generate executive report
+python -m aws_cost_optimizer track-savings -p 90 --format excel -o executive_report.xlsx
+```
+
 ### TechStartup Solution (Practice Scenario)
 
 The project includes a complete solution for the TechStartup acquisition scenario:

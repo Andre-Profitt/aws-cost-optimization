@@ -93,9 +93,9 @@ graphviz>=0.20.0  # For dependency graph visualization
 scipy>=1.9.0
 statsmodels>=0.13.0  # For advanced anomaly detection
 
-# Machine learning (optional, for advanced pattern detection)
-# scikit-learn>=1.2.0
-# tensorflow>=2.11.0  # For deep learning models
+# Machine learning (for advanced pattern detection and cost prediction)
+scikit-learn>=1.2.0
+# tensorflow>=2.11.0  # For deep learning models (optional)
 
 # API documentation
 flasgger>=0.9.5  # Swagger/OpenAPI documentation

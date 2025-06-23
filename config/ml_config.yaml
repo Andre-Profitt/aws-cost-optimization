@@ -1,0 +1,399 @@
+# Machine Learning and Real-time Configuration
+# This extends the base config.example.yaml
+
+# ML-based Cost Prediction Settings
+ml_prediction:
+  # Enable ML features
+  enabled: true
+  
+  # Model training settings
+  training:
+    lookback_days: 365          # Historical data for training
+    min_training_samples: 1000  # Minimum samples required
+    retrain_interval_days: 30   # Retrain models every 30 days
+    
+    # Model types to train
+    models:
+      - daily_cost_predictor
+      - service_cost_predictor
+      - anomaly_detector
+    
+    # Feature engineering
+    features:
+      enable_time_features: true
+      enable_rolling_statistics: true
+      rolling_windows: [7, 30, 90]
+      enable_service_features: true
+  
+  # Prediction settings
+  prediction:
+    forecast_days: 30           # Days to forecast ahead
+    confidence_interval: 0.95   # Confidence interval for predictions
+    include_service_breakdown: true
+    
+    # Anomaly detection
+    anomaly_detection:
+      enabled: true
+      threshold: 0.95           # Anomaly threshold (0-1)
+      min_impact: 1000         # Minimum $ impact to report
+      
+      # Types of anomalies to detect
+      detect_types:
+        - spike
+        - gradual_increase
+        - unusual_pattern
+        - new_resource
+        - service_surge
+  
+  # Model storage
+  storage:
+    s3_bucket: "your-ml-models-bucket"
+    model_prefix: "cost-optimizer/models/"
+    enable_versioning: true
+    retention_days: 90
+  
+  # Performance tracking
+  performance:
+    track_accuracy: true
+    alert_on_degradation: true
+    accuracy_threshold: 0.8     # Alert if MAPE > 20%
+
+# Real-time Cost Control Settings
+realtime_control:
+  # Enable real-time monitoring
+  enabled: true
+  
+  # Cost thresholds
+  thresholds:
+    # Daily spend limits
+    - threshold_id: "daily_total"
+      type: "daily"
+      value: 5000              # $5000/day
+      action: "alert"
+      notification_targets:
+        - "arn:aws:sns:us-east-1:123456789012:cost-alerts"
+      cooldown_minutes: 60
+      
+    - threshold_id: "daily_critical"
+      type: "daily"
+      value: 10000            # $10000/day
+      action: "require_approval"
+      notification_targets:
+        - "arn:aws:sns:us-east-1:123456789012:cost-critical"
+      cooldown_minutes: 30
+      
+    # Service-specific limits
+    - threshold_id: "ec2_daily"
+      type: "service"
+      target: "Amazon EC2"
+      value: 3000             # $3000/day for EC2
+      action: "throttle"
+      cooldown_minutes: 120
+      
+    - threshold_id: "rds_spike"
+      type: "service"
+      target: "Amazon RDS"
+      value: 2000
+      action: "alert"
+      cooldown_minutes: 60
+    
+    # Emergency threshold
+    - threshold_id: "emergency"
+      type: "daily"
+      value: 20000           # $20000/day
+      action: "emergency_stop"
+      notification_targets:
+        - "arn:aws:sns:us-east-1:123456789012:cost-emergency"
+      cooldown_minutes: 0
+  
+  # Circuit breakers
+  circuit_breakers:
+    enabled: true
+    
+    # Default thresholds by service
+    service_defaults:
+      "Amazon EC2": 10000
+      "Amazon RDS": 5000
+      "AWS Lambda": 1000
+      "Amazon S3": 2000
+      "Amazon DynamoDB": 1500
+      
+    # Circuit breaker behavior
+    trip_threshold_multiplier: 1.5  # Trip at 150% of normal
+    reset_timeout_hours: 1          # Reset after 1 hour
+    failure_threshold: 3            # Trip after 3 failures
+  
+  # EventBridge integration
+  eventbridge:
+    enabled: true
+    rule_prefix: "CostOptimizer"
+    
+    # Event patterns to monitor
+    monitor_events:
+      - ec2_state_changes
+      - auto_scaling_activities
+      - spot_interruptions
+      - rds_modifications
+      - lambda_throttles
+    
+    # Scheduled checks
+    scheduled_checks:
+      cost_check_interval: "rate(1 hour)"
+      anomaly_check_interval: "rate(15 minutes)"
+      threshold_check_interval: "rate(5 minutes)"
+  
+  # Automated responses
+  automated_responses:
+    enabled: true
+    require_approval_above: 1000   # Require approval for actions > $1000 impact
+    
+    # Response strategies
+    strategies:
+      throttling:
+        reduce_asg_capacity_by: 50  # Reduce by 50%
+        lambda_concurrency_limit: 100
+        
+      shutdown:
+        target_tags:
+          - Environment: "dev"
+          - Environment: "test"
+          - Critical: "false"
+        exclude_tags:
+          - DoNotStop: "true"
+          - Production: "true"
+          
+      scaling:
+        min_capacity_retention: 0.3  # Keep at least 30% capacity
+
+# Periodic Resource Detection Settings
+periodic_detection:
+  # Enable periodic pattern detection
+  enabled: true
+  
+  # Analysis settings
+  analysis:
+    lookback_days: 365            # Need full year for annual patterns
+    confidence_threshold: 0.7     # Minimum confidence for detection
+    
+    # Detection methods
+    methods:
+      fourier_analysis: true
+      seasonal_decomposition: true
+      peak_pattern_analysis: true
+      business_calendar_correlation: true
+    
+    # Known periods to check
+    check_periods:
+      - daily: 1
+      - weekly: 7
+      - monthly: 30
+      - quarterly: 91
+      - yearly: 365
+      - custom: [14, 28]          # Bi-weekly, 4-weekly
+  
+  # Business calendar
+  business_calendar:
+    # Business hours (local timezone)
+    business_hours:
+      start: "09:00"
+      end: "17:00"
+      timezone: "America/New_York"
+      
+    # Known critical periods
+    critical_periods:
+      - name: "Month End Processing"
+        days: [25, 26, 27, 28, 29, 30, 31, 1, 2, 3]
+        risk_multiplier: 2.0
+        
+      - name: "Quarter End"
+        months: [3, 6, 9, 12]
+        days: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 1, 2, 3, 4, 5]
+        risk_multiplier: 3.0
+        
+      - name: "Year End"
+        months: [12, 1]
+        risk_multiplier: 5.0
+        
+      - name: "Tax Season"
+        start_date: "03-01"
+        end_date: "04-15"
+        risk_multiplier: 2.5
+  
+  # Protection for periodic resources
+  protection:
+    auto_protect_periodic: true
+    min_confidence_for_protection: 0.8
+    protection_tags:
+      PeriodicResource: "true"
+      OptimizationRisk: "high"
+
+# Intelligent Tagging Settings
+intelligent_tagging:
+  # Enable intelligent tagging
+  enabled: true
+  
+  # Required tags (enforce compliance)
+  required_tags:
+    - Environment
+    - Owner
+    - CostCenter
+    - Application
+    - Team
+    - Project
+  
+  # Tag policies
+  tag_policies:
+    Environment:
+      allowed_values: ["production", "staging", "development", "qa", "sandbox"]
+      
+    CostCenter:
+      pattern: "^CC-[0-9]{6}$"
+      
+    Owner:
+      pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      max_length: 128
+      
+    DataClassification:
+      allowed_values: ["public", "internal", "confidential", "restricted"]
+      required_for_types: ["s3", "rds", "dynamodb", "efs"]
+  
+  # ML-based tagging
+  ml_tagging:
+    enabled: true
+    min_confidence: 0.7          # Minimum confidence to suggest
+    auto_apply_threshold: 0.9    # Auto-apply if confidence >= 0.9
+    
+    # Training settings
+    min_training_samples: 1000
+    retrain_interval_days: 30
+    
+    # Feature extraction
+    use_name_patterns: true
+    use_relationships: true
+    use_usage_patterns: true
+    
+  # Tagging rules
+  automated_rules:
+    - rule_id: "env_from_name"
+      name: "Environment from Name Pattern"
+      condition_type: "pattern"
+      condition:
+        name_pattern: ".*-(dev|test|qa|stg|prod)-.*"
+      tags_to_apply:
+        Environment: "$1"
+      priority: 10
+      
+    - rule_id: "team_from_vpc"
+      name: "Inherit Team from VPC"
+      condition_type: "relationship"
+      condition:
+        relationship: "vpc"
+        inherit_tags: ["Team", "Project"]
+      priority: 5
+      
+    - rule_id: "cost_center_default"
+      name: "Default Cost Center"
+      condition_type: "resource_type"
+      condition:
+        types: ["ec2", "rds", "lambda"]
+      tags_to_apply:
+        CostCenter: "CC-000000"  # Default/unallocated
+      priority: 1
+
+# Savings Tracking Settings
+savings_tracking:
+  # Enable savings tracking
+  enabled: true
+  
+  # Storage backend
+  storage:
+    backend: "dynamodb"           # dynamodb or s3
+    dynamodb_table: "cost-optimization-savings"
+    s3_bucket: "cost-optimization-reports"
+    
+  # Tracking settings
+  tracking:
+    auto_track_optimizations: true
+    update_interval_days: 7       # Update actual savings weekly
+    
+    # Validation
+    require_validation: true
+    validation_methods:
+      - cost_explorer_comparison
+      - cloudwatch_metrics
+      - tag_based_allocation
+  
+  # Reporting
+  reporting:
+    # Executive dashboard
+    executive_dashboard:
+      enabled: true
+      update_frequency: "daily"
+      metrics:
+        - total_savings_ytd
+        - savings_by_type
+        - savings_by_service
+        - projection_accuracy
+        - optimization_success_rate
+        
+    # Automated reports
+    scheduled_reports:
+      - name: "Weekly Savings Summary"
+        frequency: "weekly"
+        recipients:
+          - "finance@company.com"
+          - "devops@company.com"
+        format: "excel"
+        
+      - name: "Monthly Executive Report"
+        frequency: "monthly"
+        recipients:
+          - "executives@company.com"
+        format: "pdf"
+        include_charts: true
+  
+  # Alerts
+  alerts:
+    # Alert on projection misses
+    projection_accuracy_threshold: 0.7  # Alert if < 70% accurate
+    
+    # Alert on failed optimizations
+    failure_rate_threshold: 0.2         # Alert if > 20% fail
+    
+    # Notification settings
+    notification_channels:
+      - type: "sns"
+        topic_arn: "arn:aws:sns:us-east-1:123456789012:savings-alerts"
+      - type: "email"
+        addresses: ["cost-team@company.com"]
+
+# Integration Settings
+integrations:
+  # Cost allocation tags
+  cost_allocation:
+    sync_with_aws: true
+    update_frequency: "daily"
+    
+  # FinOps tools
+  finops:
+    cloudability:
+      enabled: false
+      api_key: ""
+      
+    cloudhealth:
+      enabled: false
+      api_key: ""
+      
+  # Monitoring
+  monitoring:
+    cloudwatch:
+      create_dashboard: true
+      dashboard_name: "CostOptimization"
+      
+    datadog:
+      enabled: false
+      api_key: ""
+      
+    prometheus:
+      enabled: false
+      endpoint: ""

@@ -11,6 +11,12 @@ from .s3_access_analyzer import (
     S3AccessAnalyzer,
     integrate_with_s3_optimizer
 )
+from .periodic_detector import (
+    PeriodicResourceDetector,
+    PeriodType,
+    PeriodicPattern,
+    ResourcePeriodicity
+)
 
 __all__ = [
     'PatternDetector',
@@ -19,5 +25,9 @@ __all__ = [
     'WorkloadType',
     'UsagePhase',
     'S3AccessAnalyzer',
-    'integrate_with_s3_optimizer'
+    'integrate_with_s3_optimizer',
+    'PeriodicResourceDetector',
+    'PeriodType',
+    'PeriodicPattern',
+    'ResourcePeriodicity'
 ]

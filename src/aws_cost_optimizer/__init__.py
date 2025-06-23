@@ -1,4 +1,4 @@
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 # Core components
 from .optimization.ec2_optimizer import EC2Optimizer, EC2OptimizationRecommendation
@@ -18,6 +18,15 @@ from .optimization.safety_checks import SafetyChecker, SafetyOrchestrator
 from .analysis.pattern_detector import PatternDetector, ResourcePattern, WorkloadCharacteristics, WorkloadType, UsagePhase
 from .analysis.cost_anomaly_detector import CostAnomalyDetector, CostAnomaly, CostTrend
 from .analysis.s3_access_analyzer import S3AccessAnalyzer, integrate_with_s3_optimizer
+from .analysis.periodic_detector import PeriodicResourceDetector, PeriodType, PeriodicPattern, ResourcePeriodicity
+
+from .ml.cost_predictor import CostPredictor, CostPrediction, PredictedAnomaly, ModelPerformance, PredictionType, AnomalyType
+
+from .realtime.cost_controller import RealtimeCostController, CostThreshold, CircuitBreaker, CostEvent, ControlAction, ThresholdType
+
+from .tagging.intelligent_tagger import IntelligentTagger, TagSuggestion, TaggingRule, TagComplianceResult, TagCategory
+
+from .tracking.savings_tracker import SavingsTracker, OptimizationRecord, SavingsSummary, OptimizationType, SavingsStatus
 
 from .discovery.multi_account import MultiAccountInventory, AWSAccount
 
@@ -81,6 +90,40 @@ __all__ = [
     'CostTrend',
     'S3AccessAnalyzer',
     'integrate_with_s3_optimizer',
+    'PeriodicResourceDetector',
+    'PeriodType',
+    'PeriodicPattern',
+    'ResourcePeriodicity',
+    
+    # ML
+    'CostPredictor',
+    'CostPrediction',
+    'PredictedAnomaly',
+    'ModelPerformance',
+    'PredictionType',
+    'AnomalyType',
+    
+    # Real-time
+    'RealtimeCostController',
+    'CostThreshold',
+    'CircuitBreaker',
+    'CostEvent',
+    'ControlAction',
+    'ThresholdType',
+    
+    # Tagging
+    'IntelligentTagger',
+    'TagSuggestion',
+    'TaggingRule',
+    'TagComplianceResult',
+    'TagCategory',
+    
+    # Tracking
+    'SavingsTracker',
+    'OptimizationRecord',
+    'SavingsSummary',
+    'OptimizationType',
+    'SavingsStatus',
     
     # Discovery
     'MultiAccountInventory',
