@@ -4,7 +4,7 @@ __version__ = "1.0.0"
 from .optimization.ec2_optimizer import EC2Optimizer, EC2OptimizationRecommendation
 from .optimization.network_optimizer import NetworkOptimizer, NetworkOptimizationRecommendation
 from .optimization.reserved_instance_analyzer import ReservedInstanceAnalyzer, RIRecommendation, SavingsPlanRecommendation
-from .optimization.rds_optimizer import RDSOptimizer, RDSOptimizationRecommendation
+from .optimization.rds_optimizer import RDSOptimizer, RDSRecommendation, RDSOptimizationAction
 from .optimization.s3_optimizer import S3Optimizer, S3OptimizationRecommendation
 from .optimization.auto_remediation_engine import (
     AutoRemediationEngine,
@@ -15,7 +15,7 @@ from .optimization.auto_remediation_engine import (
 )
 from .optimization.safety_checks import SafetyChecker, SafetyOrchestrator
 
-from .analysis.pattern_detector import PatternDetector
+from .analysis.pattern_detector import PatternDetector, ResourcePattern, WorkloadCharacteristics, WorkloadType, UsagePhase
 from .analysis.cost_anomaly_detector import CostAnomalyDetector, CostAnomaly, CostTrend
 
 from .discovery.multi_account import MultiAccountInventory, AWSAccount
@@ -32,7 +32,8 @@ __all__ = [
     'NetworkOptimizer',
     'NetworkOptimizationRecommendation',
     'RDSOptimizer',
-    'RDSOptimizationRecommendation',
+    'RDSRecommendation',
+    'RDSOptimizationAction',
     'S3Optimizer',
     'S3OptimizationRecommendation',
     'ReservedInstanceAnalyzer',
@@ -52,6 +53,10 @@ __all__ = [
     
     # Analysis
     'PatternDetector',
+    'ResourcePattern',
+    'WorkloadCharacteristics',
+    'WorkloadType',
+    'UsagePhase',
     'CostAnomalyDetector',
     'CostAnomaly',
     'CostTrend',

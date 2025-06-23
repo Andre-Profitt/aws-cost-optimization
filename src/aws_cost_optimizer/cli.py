@@ -4,7 +4,7 @@ import json
 import boto3
 from pathlib import Path
 from datetime import datetime
-from .discovery.multi_account import MultiAccountDiscovery
+from .discovery.multi_account import MultiAccountInventory
 from .orchestrator import CostOptimizationOrchestrator
 
 @click.group()

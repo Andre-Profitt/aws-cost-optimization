@@ -21,7 +21,7 @@ from .optimization.auto_remediation_engine import (
 )
 from .analysis.cost_anomaly_detector import CostAnomalyDetector
 from .analysis.pattern_detector import PatternDetector
-from .discovery.multi_account import MultiAccountDiscovery
+from .discovery.multi_account import MultiAccountInventory
 from .discovery.s3_discovery import S3Discovery
 from .reporting.excel_reporter import ExcelReporter
 
@@ -93,7 +93,7 @@ class CostOptimizationOrchestrator:
         # Multi-account support
         self.multi_account = None
         if self.config.get('enable_multi_account', False):
-            self.multi_account = MultiAccountDiscovery(session=self.session)
+            self.multi_account = MultiAccountInventory(session=self.session)
     
     def run_full_optimization(self, 
                             regions: List[str] = None,
