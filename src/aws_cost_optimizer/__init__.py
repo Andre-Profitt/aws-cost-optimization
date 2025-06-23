@@ -20,6 +20,22 @@ from .analysis.cost_anomaly_detector import CostAnomalyDetector, CostAnomaly, Co
 
 from .discovery.multi_account import MultiAccountInventory, AWSAccount
 
+from .compliance import (
+    ComplianceManager,
+    AuditTrail,
+    ComplianceStatus,
+    AuditEventType,
+    ComplianceRule,
+    ComplianceViolation,
+    AuditEvent
+)
+
+from .enterprise import (
+    EnterpriseConfig,
+    EnterpriseOptimizer,
+    EnhancedSafetyChecker
+)
+
 from .orchestrator import CostOptimizationOrchestrator, OptimizationResult
 
 __all__ = [
@@ -64,6 +80,20 @@ __all__ = [
     # Discovery
     'MultiAccountInventory',
     'AWSAccount',
+    
+    # Compliance
+    'ComplianceManager',
+    'AuditTrail',
+    'ComplianceStatus',
+    'AuditEventType',
+    'ComplianceRule',
+    'ComplianceViolation',
+    'AuditEvent',
+    
+    # Enterprise
+    'EnterpriseConfig',
+    'EnterpriseOptimizer',
+    'EnhancedSafetyChecker',
     
     # Orchestration
     'CostOptimizationOrchestrator',

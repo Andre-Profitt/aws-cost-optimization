@@ -114,6 +114,100 @@ notifications:
     enabled: false
     topic_arn: arn:aws:sns:us-east-1:123456789012:cost-optimization
 
+# Compliance settings
+compliance:
+  # Enable compliance checking
+  enabled: true
+  
+  # Required tags for all resources
+  required_tags:
+    - Environment
+    - Owner
+    - CostCenter
+    - Project
+  
+  # Data residency requirements
+  data_residency:
+    enabled: true
+    # Map of residency requirement to allowed regions
+    us_only:
+      - us-east-1
+      - us-east-2
+      - us-west-1
+      - us-west-2
+    eu_only:
+      - eu-west-1
+      - eu-west-2
+      - eu-west-3
+      - eu-central-1
+  
+  # Regulatory compliance tags
+  regulatory_tags:
+    - HIPAA
+    - PCI
+    - SOX
+    - GDPR
+  
+  # Change freeze periods
+  change_freeze:
+    enabled: true
+    # Check ChangeFreezeUntil tag on resources
+    honor_freeze_tags: true
+    # Global freeze periods (cron format)
+    freeze_periods:
+      - "0 0 * 12 *"  # December (holiday season)
+      - "0 0 * * 5"   # Fridays
+  
+  # Compliance rules
+  custom_rules:
+    - rule_id: "PROD_LOCK_001"
+      name: "Production Lock"
+      description: "Production resources require executive approval"
+      tag_patterns:
+        Environment: "^(prod|production)$"
+      severity: "critical"
+      
+    - rule_id: "DATA_CLASS_001"
+      name: "Data Classification"
+      description: "Storage must have data classification"
+      required_tags:
+        - DataClassification
+      resource_types:
+        - s3
+        - ebs
+        - efs
+      severity: "high"
+
+# Audit trail settings
+audit:
+  # Enable audit trail
+  enabled: true
+  
+  # S3 bucket for audit logs (will be created if doesn't exist)
+  s3_bucket: "your-company-aws-cost-optimizer-audit"
+  
+  # DynamoDB table for audit events (will be created if doesn't exist)
+  dynamodb_table: "aws-cost-optimizer-audit-events"
+  
+  # Retention settings
+  retention_days: 365  # Keep audit logs for 1 year
+  
+  # Real-time alerts for critical events
+  alerts:
+    enabled: true
+    sns_topic_arn: "arn:aws:sns:us-east-1:123456789012:cost-optimizer-audit-alerts"
+    alert_on:
+      - policy_violation
+      - access_denied
+      - high_risk_change
+      - compliance_failure
+  
+  # Export settings
+  export:
+    format: json  # json, csv
+    schedule: weekly  # daily, weekly, monthly
+    destination: s3  # s3, email
+
 # Advanced settings
 advanced:
   # Number of parallel workers
@@ -134,3 +228,25 @@ advanced:
     file: aws-cost-optimizer.log
     max_size_mb: 100
     backup_count: 5
+
+# Enterprise Features (Optional)
+# For full enterprise configuration, see config/enterprise_config.yaml
+enterprise:
+  # Enable enterprise mode
+  enabled: false
+  
+  # Dependency mapping
+  enable_dependency_mapping: true
+  
+  # Change management
+  enable_change_management: true
+  ticketing_system: none  # servicenow, jira, or none
+  auto_approve_low_risk: false
+  
+  # Enhanced monitoring
+  enable_monitoring: true
+  monitoring_duration_hours: 72
+  create_dashboards: true
+  
+  # SNS topic for enterprise notifications
+  sns_topic_arn: ""

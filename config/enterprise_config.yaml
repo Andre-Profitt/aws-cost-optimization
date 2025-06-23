@@ -1,0 +1,355 @@
+# Enterprise AWS Cost Optimizer Configuration
+# This configuration file contains all settings for enterprise features
+
+# AWS Settings
+aws:
+  # List of regions to analyze
+  regions:
+    - us-east-1
+    - us-west-2
+    # - eu-west-1
+    # - ap-southeast-1
+  
+  # AWS profile to use (optional)
+  profile: ${AWS_PROFILE}  # Can use environment variable
+  
+  # Cross-account role name (for multi-account setups)
+  cross_account_role: OrganizationCostOptimizerRole
+
+# Enterprise Features Configuration
+enterprise:
+  # Dependency Mapping
+  dependency_mapping:
+    enabled: true
+    # Analyze VPC flow logs for network dependencies
+    analyze_vpc_flow_logs: true
+    # Analyze CloudFormation stacks
+    analyze_cloudformation: true
+    # Maximum depth for dependency traversal
+    max_depth: 5
+    # Cache dependency maps
+    cache_enabled: true
+    cache_ttl_hours: 24
+  
+  # Change Management
+  change_management:
+    enabled: true
+    # Ticketing system: servicenow, jira, or none
+    ticketing_system: servicenow
+    
+    # ServiceNow Configuration (use environment variables for security)
+    servicenow:
+      instance_url: ${SERVICENOW_URL}
+      username: ${SERVICENOW_USER}
+      password: ${SERVICENOW_PASS}
+      
+    # Jira Configuration (alternative)
+    jira:
+      server_url: ${JIRA_URL}
+      username: ${JIRA_USER}
+      api_token: ${JIRA_TOKEN}
+      project_key: ${JIRA_PROJECT}
+    
+    # Approval rules
+    approval_rules:
+      auto_approve_low_risk: false
+      auto_approve_max_savings: 100  # Maximum monthly savings to auto-approve
+      require_approval_for_production: true
+      require_cac_for_critical: true  # Change Advisory Committee
+      
+    # Risk thresholds
+    risk_thresholds:
+      low_max_dependencies: 2
+      low_max_savings: 500
+      medium_max_dependencies: 5
+      medium_max_savings: 2000
+  
+  # Monitoring Integration
+  monitoring:
+    enabled: true
+    monitoring_duration_hours: 72  # Monitor for 3 days after changes
+    create_dashboards: true
+    enable_anomaly_detection: true
+    
+    # CloudWatch settings
+    cloudwatch:
+      custom_namespace: AWS/CostOptimizer
+      detailed_monitoring: true
+      
+    # Alarm thresholds
+    alarms:
+      cpu_threshold_percent: 80
+      error_rate_threshold: 5
+      availability_threshold: 99.5
+      
+    # Integration with other monitoring systems
+    datadog:
+      enabled: false
+      api_key: ${DATADOG_API_KEY}
+      app_key: ${DATADOG_APP_KEY}
+  
+  # Compliance Settings
+  compliance:
+    enabled: true
+    enforce_compliance: true
+    block_non_compliant: true
+    
+    # Required tags for all resources
+    required_tags:
+      - Environment
+      - Owner
+      - CostCenter
+      - Project
+      - DataClassification
+    
+    # Data residency requirements
+    data_residency:
+      enabled: true
+      us_only:
+        - us-east-1
+        - us-east-2
+        - us-west-1
+        - us-west-2
+      eu_only:
+        - eu-west-1
+        - eu-west-2
+        - eu-west-3
+        - eu-central-1
+    
+    # Regulatory compliance tags
+    regulatory_tags:
+      - HIPAA
+      - PCI
+      - SOX
+      - GDPR
+      - FedRAMP
+    
+    # Custom compliance rules
+    custom_rules:
+      - rule_id: "PROD_LOCK_001"
+        name: "Production Lock"
+        description: "Production resources require executive approval"
+        tag_patterns:
+          Environment: "^(prod|production)$"
+        severity: "critical"
+        
+      - rule_id: "DATA_CLASS_001"
+        name: "Data Classification Required"
+        description: "All storage resources must have data classification"
+        required_tags:
+          - DataClassification
+        resource_types:
+          - s3
+          - ebs
+          - rds
+        severity: "high"
+  
+  # Audit Trail
+  audit:
+    enabled: true
+    # S3 bucket for audit logs (will be created if doesn't exist)
+    s3_bucket: "${COMPANY_NAME}-aws-cost-optimizer-audit"
+    # DynamoDB table for audit events
+    dynamodb_table: "aws-cost-optimizer-audit-events"
+    # Retention settings
+    retention_days: 365
+    # Enable encryption
+    encryption_enabled: true
+    kms_key_id: "alias/aws-cost-optimizer"
+
+# Safety Settings
+safety:
+  # Always run in dry-run mode first
+  dry_run: true
+  
+  # Enhanced safety checks
+  enhanced_checks:
+    check_business_hours: true
+    check_change_freeze: true
+    check_high_availability: true
+    check_recent_changes: true
+  
+  # Business hours configuration
+  business_hours:
+    timezone: "America/New_York"
+    start_hour: 9
+    end_hour: 17
+    work_days: [1, 2, 3, 4, 5]  # Monday to Friday
+  
+  # Change freeze periods
+  change_freeze:
+    enabled: true
+    # Check ChangeFreezeUntil tag on resources
+    honor_freeze_tags: true
+    # Global freeze periods
+    freeze_periods:
+      - name: "End of Year"
+        start: "2024-12-15"
+        end: "2025-01-05"
+      - name: "Black Friday"
+        start: "2024-11-25"
+        end: "2024-11-30"
+  
+  # Tags that mark resources as protected
+  protected_tags:
+    - DoNotOptimize
+    - Production-Critical
+    - Revenue-Generating
+    - Compliance-Required
+
+# Notification Settings
+notifications:
+  # SNS Topics
+  sns_topics:
+    alerts: "arn:aws:sns:us-east-1:${AWS_ACCOUNT_ID}:cost-optimizer-alerts"
+    approvals: "arn:aws:sns:us-east-1:${AWS_ACCOUNT_ID}:cost-optimizer-approvals"
+    reports: "arn:aws:sns:us-east-1:${AWS_ACCOUNT_ID}:cost-optimizer-reports"
+  
+  # Slack Integration
+  slack:
+    enabled: false
+    webhook_url: ${SLACK_WEBHOOK_URL}
+    channel: "#aws-cost-optimization"
+    mention_on_critical: "@channel"
+  
+  # Email settings
+  email:
+    enabled: false
+    smtp_host: smtp.gmail.com
+    smtp_port: 587
+    from_address: aws-optimizer@company.com
+    to_addresses:
+      - devops@company.com
+      - finance@company.com
+      - cto@company.com
+
+# Reporting Configuration
+reporting:
+  # Output directory for reports
+  output_dir: "reports"
+  
+  # Report formats
+  formats:
+    - excel
+    - pdf
+    - json
+    - html
+  
+  # Report scheduling
+  schedule:
+    daily_summary: true
+    weekly_detailed: true
+    monthly_executive: true
+  
+  # Report distribution
+  distribution:
+    s3_bucket: "${COMPANY_NAME}-cost-reports"
+    email_recipients:
+      daily: ["devops@company.com"]
+      weekly: ["devops@company.com", "managers@company.com"]
+      monthly: ["executives@company.com", "finance@company.com"]
+
+# Optimization Settings
+optimization:
+  # EC2 optimization
+  ec2:
+    cpu_threshold: 10
+    memory_threshold: 20
+    network_threshold: 5
+    observation_days: 14
+    
+    # Instance types to exclude
+    excluded_instance_types:
+      - t2.nano
+      - t2.micro
+    
+    # Rightsizing settings
+    rightsizing:
+      enabled: true
+      cpu_p95_threshold: 60
+      minimum_savings: 50
+  
+  # RDS optimization
+  rds:
+    cpu_threshold: 10
+    connection_threshold: 5
+    storage_threshold: 20
+    backup_retention_days: 7
+    
+    # Aurora settings
+    aurora:
+      recommend_serverless: true
+      min_capacity: 1
+      max_capacity: 4
+  
+  # S3 optimization
+  s3:
+    # Storage class transitions (days)
+    standard_to_ia_days: 30
+    ia_to_glacier_days: 90
+    glacier_to_deep_archive_days: 180
+    
+    # Minimum object size for recommendations
+    min_object_size_mb: 128
+    
+    # Lifecycle policy settings
+    enable_lifecycle_recommendations: true
+    
+    # Intelligent tiering
+    recommend_intelligent_tiering: true
+
+# Advanced Settings
+advanced:
+  # Parallel processing
+  parallel_workers: 20
+  batch_size: 50
+  
+  # API rate limiting
+  rate_limit: 10
+  retry_attempts: 3
+  retry_delay: 1
+  
+  # Caching
+  cache:
+    enabled: true
+    backend: "redis"  # redis or memory
+    redis_url: ${REDIS_URL}
+    ttl_hours: 24
+  
+  # Performance profiling
+  profiling:
+    enabled: false
+    output_dir: "profiles"
+  
+  # Debug settings
+  debug:
+    enabled: false
+    verbose_logging: false
+    save_raw_data: false
+
+# Integration with other systems
+integrations:
+  # Cost allocation tags sync
+  cost_allocation:
+    sync_enabled: true
+    sync_interval_hours: 24
+  
+  # AWS Organizations
+  organizations:
+    enabled: true
+    scan_all_accounts: true
+    exclude_accounts: []
+  
+  # AWS Config
+  config:
+    enabled: true
+    use_aggregator: true
+  
+  # Third-party integrations
+  cloudhealth:
+    enabled: false
+    api_key: ${CLOUDHEALTH_API_KEY}
+  
+  cloudability:
+    enabled: false
+    api_key: ${CLOUDABILITY_API_KEY}

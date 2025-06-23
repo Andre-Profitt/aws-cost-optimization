@@ -24,6 +24,7 @@ from .analysis.pattern_detector import PatternDetector
 from .discovery.multi_account import MultiAccountInventory
 from .discovery.s3_discovery import S3Discovery
 from .reporting.excel_reporter import ExcelReporter
+from .compliance import ComplianceManager, AuditTrail, AuditEventType
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,19 @@ class CostOptimizationOrchestrator:
         self.multi_account = None
         if self.config.get('enable_multi_account', False):
             self.multi_account = MultiAccountInventory(session=self.session)
+        
+        # Compliance and audit trail
+        self.compliance_manager = None
+        self.audit_trail = None
+        if self.config.get('enable_compliance', True):
+            self.compliance_manager = ComplianceManager(
+                config=self.config.get('compliance_config', {}),
+                session=self.session
+            )
+            self.audit_trail = AuditTrail(
+                config=self.config.get('audit_config', {}),
+                session=self.session
+            )
     
     def run_full_optimization(self, 
                             regions: List[str] = None,
@@ -203,6 +217,24 @@ class CostOptimizationOrchestrator:
         logger.info("Running EC2 optimization...")
         
         recommendations = self.ec2_optimizer.analyze_all_instances(regions)
+        
+        # Apply compliance filtering if enabled
+        if self.compliance_manager:
+            compliant_recommendations = []
+            for rec in recommendations:
+                # Get instance tags (simplified - would need actual tag lookup)
+                tags = getattr(rec, 'tags', {})
+                if self.compliance_manager.check_optimization_compliance(rec, tags):
+                    compliant_recommendations.append(rec)
+                else:
+                    logger.info(f"Filtered non-compliant recommendation for {rec.instance_id}")
+            recommendations = compliant_recommendations
+        
+        # Log recommendations to audit trail
+        if self.audit_trail:
+            user = self.config.get('user', 'system')
+            for rec in recommendations:
+                self.audit_trail.log_recommendation(user, rec, getattr(rec, 'tags', {}))
         
         total_savings = sum(r.monthly_savings for r in recommendations)
         
@@ -573,3 +605,132 @@ class CostOptimizationOrchestrator:
         logger.info(f"Detailed report exported to {output_file}")
         
         return output_file
+    
+    def generate_compliance_report(self,
+                                 start_date: datetime = None,
+                                 end_date: datetime = None,
+                                 output_file: str = 'compliance_report.html') -> str:
+        """Generate compliance report"""
+        if not self.compliance_manager:
+            logger.warning("Compliance manager not enabled")
+            return ""
+        
+        if not start_date:
+            start_date = datetime.now() - timedelta(days=30)
+        if not end_date:
+            end_date = datetime.now()
+        
+        compliance_report = self.compliance_manager.generate_compliance_report(
+            start_date, end_date
+        )
+        
+        # Generate HTML report
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>AWS Cost Optimizer Compliance Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                h1 {{ color: #232F3E; }}
+                h2 {{ color: #FF9900; }}
+                .summary {{ background-color: #f5f5f5; padding: 20px; border-radius: 8px; }}
+                .compliant {{ color: #2ecc71; }}
+                .non-compliant {{ color: #e74c3c; }}
+                table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+                th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+                th {{ background-color: #232F3E; color: white; }}
+            </style>
+        </head>
+        <body>
+            <h1>Compliance Report</h1>
+            <p>Period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}</p>
+            
+            <div class="summary">
+                <h2>Summary</h2>
+                <p>Total Resources Checked: {compliance_report['summary']['total_resources_checked']}</p>
+                <p class="compliant">Compliant Resources: {compliance_report['summary']['compliant_resources']}</p>
+                <p class="non-compliant">Non-Compliant Resources: {compliance_report['summary']['non_compliant_resources']}</p>
+            </div>
+            
+            <h2>Violations by Severity</h2>
+            <table>
+                <tr>
+                    <th>Severity</th>
+                    <th>Count</th>
+                </tr>
+        """
+        
+        for severity, count in compliance_report['summary']['violations_by_severity'].items():
+            html_content += f"""
+                <tr>
+                    <td>{severity}</td>
+                    <td>{count}</td>
+                </tr>
+            """
+        
+        html_content += """
+            </table>
+        </body>
+        </html>
+        """
+        
+        with open(output_file, 'w') as f:
+            f.write(html_content)
+        
+        logger.info(f"Compliance report generated: {output_file}")
+        return output_file
+    
+    def generate_audit_report(self,
+                            start_date: datetime = None,
+                            end_date: datetime = None,
+                            output_file: str = 'audit_report.json') -> str:
+        """Generate audit trail report"""
+        if not self.audit_trail:
+            logger.warning("Audit trail not enabled")
+            return ""
+        
+        if not start_date:
+            start_date = datetime.now() - timedelta(days=7)
+        if not end_date:
+            end_date = datetime.now()
+        
+        audit_report = self.audit_trail.generate_audit_report(start_date, end_date)
+        
+        with open(output_file, 'w') as f:
+            json.dump(audit_report, f, indent=2, default=str)
+        
+        logger.info(f"Audit report generated: {output_file}")
+        return output_file
+    
+    def run_enterprise_optimization(self, 
+                                  regions: List[str] = None,
+                                  services: List[str] = None,
+                                  user: str = "system") -> Dict[str, Any]:
+        """
+        Run optimization with enterprise features enabled
+        
+        This method delegates to the EnterpriseOptimizer for advanced features
+        like dependency mapping, change management, and enhanced monitoring
+        """
+        from .enterprise import EnterpriseConfig, EnterpriseOptimizer
+        
+        # Create enterprise config from existing config
+        enterprise_config = EnterpriseConfig(
+            enable_dependency_mapping=self.config.get('enterprise', {}).get('enable_dependency_mapping', True),
+            enable_change_management=self.config.get('enterprise', {}).get('enable_change_management', True),
+            enable_monitoring=self.config.get('enterprise', {}).get('enable_monitoring', True),
+            enable_compliance=self.config.get('enable_compliance', True),
+            enable_audit_trail=self.config.get('enable_compliance', True),
+            ticketing_system=self.config.get('enterprise', {}).get('ticketing_system', 'none'),
+            auto_approve_low_risk=self.config.get('enterprise', {}).get('auto_approve_low_risk', False),
+            monitoring_duration_hours=self.config.get('enterprise', {}).get('monitoring_duration_hours', 72),
+            create_dashboards=self.config.get('enterprise', {}).get('create_dashboards', True),
+            sns_topic_arn=self.config.get('enterprise', {}).get('sns_topic_arn')
+        )
+        
+        # Initialize enterprise optimizer
+        enterprise_optimizer = EnterpriseOptimizer(enterprise_config, self.session)
+        
+        # Run enterprise optimization
+        return enterprise_optimizer.run_enterprise_optimization(regions, services, user)

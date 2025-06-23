@@ -51,6 +51,22 @@ A comprehensive tool for identifying and implementing AWS cost optimization oppo
 - **Caching System**: Performance optimization with TTL-based caching
 - **Progress Tracking**: Visual progress bars for long-running operations
 
+### Enterprise Features (NEW)
+- **Dependency Mapping**: Automatically discover and map resource dependencies
+- **Change Management**: Integration with ServiceNow and Jira for approval workflows
+- **Enhanced Monitoring**: CloudWatch dashboards, anomaly detection, and post-change monitoring
+- **Compliance Management**: Enforce tagging policies and regulatory requirements
+- **Tag Compliance Rules**: Define required, prohibited, and pattern-based tag rules
+- **Data Residency Controls**: Ensure resources comply with geographic restrictions
+- **Regulatory Compliance**: Built-in support for HIPAA, PCI, SOX, and GDPR requirements
+- **Change Freeze Periods**: Honor blackout windows and change freeze tags
+- **Compliance Reporting**: Generate detailed compliance status reports
+- **Audit Trail**: Complete audit logging for all optimization activities
+- **Event Tracking**: Log all recommendations, approvals, and executions
+- **Compliance Filtering**: Automatically filter non-compliant optimization recommendations
+- **Real-time Alerts**: SNS integration for compliance violations and critical events
+- **Scheduled Optimization**: Run automated optimization on a schedule
+
 ## Quick Start
 
 ```bash
@@ -134,4 +150,76 @@ if TagUtils.is_critical_resource(tags):
     print("This is a critical resource")
 ```
 
+### Compliance and Audit Examples
+
+```python
+from aws_cost_optimizer import ComplianceManager, AuditTrail
+
+# Initialize compliance manager
+compliance_manager = ComplianceManager(
+    config={
+        'required_tags': ['Environment', 'Owner', 'CostCenter'],
+        'regulatory_tags': ['HIPAA', 'PCI', 'SOX']
+    }
+)
+
+# Check resource compliance
+result = compliance_manager.check_resource_compliance(
+    resource_id='i-1234567890',
+    resource_type='ec2',
+    region='us-east-1',
+    tags={'Environment': 'prod', 'Owner': 'devops'}
+)
+
+if result['status'].value == 'non_compliant':
+    print(f"Resource has {len(result['violations'])} compliance violations")
+
+# Initialize audit trail
+audit_trail = AuditTrail(config={
+    'audit_bucket': 'company-audit-logs',
+    'audit_table': 'cost-optimizer-events'
+})
+
+# Query audit events
+from datetime import datetime, timedelta
+events = audit_trail.query_audit_trail(
+    start_time=datetime.now() - timedelta(days=7),
+    end_time=datetime.now(),
+    filters={'event_type': 'CHANGE_EXECUTED'}
+)
+```
+
+### CLI Compliance Commands
+
+```bash
+# Check compliance for a specific resource
+python -m aws_cost_optimizer check-compliance -r i-1234567890 -t ec2
+
+# Generate compliance report
+python -m aws_cost_optimizer compliance-report --start-date 2024-01-01 --end-date 2024-01-31
+
+# Query audit trail
+python -m aws_cost_optimizer audit-trail --start-date 2024-01-01 --user john.doe --format csv
+
+# View all available commands
+python -m aws_cost_optimizer --help
+```
+
+### Enterprise CLI Commands
+
+```bash
+# Run enterprise optimization with full features
+python -m aws_cost_optimizer enterprise-analyze -r us-east-1 us-west-2
+
+# Execute approved changes
+python -m aws_cost_optimizer execute-changes --dry-run
+
+# Generate enterprise compliance report
+python -m aws_cost_optimizer enterprise-report --days 30
+
+# Run scheduled optimization (Mondays at 9 AM)
+python examples/enterprise_example.py --schedule --cron "0 9 * * 1"
+```
+
 See the full documentation in the `docs/` directory for detailed usage instructions.
+For enterprise features, see `docs/ENTERPRISE_FEATURES.md`.
