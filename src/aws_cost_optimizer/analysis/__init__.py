@@ -17,6 +17,11 @@ from .periodic_detector import (
     PeriodicPattern,
     ResourcePeriodicity
 )
+from .cost_anomaly_detector import (
+    CostAnomalyDetector,
+    CostAnomaly,
+    CostTrend
+)
 
 __all__ = [
     'PatternDetector',
@@ -29,5 +34,8 @@ __all__ = [
     'PeriodicResourceDetector',
     'PeriodType',
     'PeriodicPattern',
-    'ResourcePeriodicity'
+    'ResourcePeriodicity',
+    'CostAnomalyDetector',
+    'CostAnomaly',
+    'CostTrend'
 ]

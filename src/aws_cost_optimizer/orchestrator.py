@@ -57,8 +57,19 @@ class CostOptimizationOrchestrator:
             session: Boto3 session
             config: Configuration dictionary
         """
-        self.session = session or boto3.Session()
+        self.session = session
         self.config = config or {}
+        
+        # Try to create session if not provided
+        if not self.session:
+            try:
+                # Try to create session with region from config
+                region = self.config.get('aws', {}).get('regions', ['us-east-1'])[0]
+                self.session = boto3.Session(region_name=region)
+            except Exception:
+                # If that fails, we'll create components without session
+                # They'll need to handle None session gracefully
+                self.session = None
         
         # Initialize components
         self.ec2_optimizer = EC2Optimizer(session=self.session)
@@ -74,9 +85,9 @@ class CostOptimizationOrchestrator:
             lookback_days=self.config.get('ri_lookback_days', 90)
         )
         self.anomaly_detector = CostAnomalyDetector(
-            session=self.session,
             lookback_days=self.config.get('anomaly_lookback_days', 90),
-            anomaly_threshold=self.config.get('anomaly_threshold', 2.5)
+            anomaly_threshold=self.config.get('anomaly_threshold', 2.5),
+            session=self.session
         )
         self.pattern_detector = PatternDetector(session=self.session)
         self.excel_reporter = ExcelReporter()
@@ -439,19 +450,19 @@ class CostOptimizationOrchestrator:
                     <td>EC2 Instances</td>
                     <td class="savings">${result.ec2_savings:,.2f}</td>
                     <td class="savings">${result.ec2_savings * 12:,.2f}</td>
-                    <td>{(result.ec2_savings / result.total_monthly_savings * 100):.1f}%</td>
+                    <td>{(result.ec2_savings / result.total_monthly_savings * 100) if result.total_monthly_savings > 0 else 0:.1f}%</td>
                 </tr>
                 <tr>
                     <td>Network Resources</td>
                     <td class="savings">${result.network_savings:,.2f}</td>
                     <td class="savings">${result.network_savings * 12:,.2f}</td>
-                    <td>{(result.network_savings / result.total_monthly_savings * 100):.1f}%</td>
+                    <td>{(result.network_savings / result.total_monthly_savings * 100) if result.total_monthly_savings > 0 else 0:.1f}%</td>
                 </tr>
                 <tr>
                     <td>Reserved Instances</td>
                     <td class="savings">${result.ri_savings:,.2f}</td>
                     <td class="savings">${result.ri_savings * 12:,.2f}</td>
-                    <td>{(result.ri_savings / result.total_monthly_savings * 100):.1f}%</td>
+                    <td>{(result.ri_savings / result.total_monthly_savings * 100) if result.total_monthly_savings > 0 else 0:.1f}%</td>
                 </tr>
             </table>
             
@@ -713,7 +724,27 @@ class CostOptimizationOrchestrator:
         This method delegates to the EnterpriseOptimizer for advanced features
         like dependency mapping, change management, and enhanced monitoring
         """
-        from .enterprise import EnterpriseConfig, EnterpriseOptimizer
+        try:
+            from .enterprise import EnterpriseConfig, EnterpriseOptimizer
+        except ImportError:
+            logger.error("Enterprise module not available. Please ensure enterprise features are installed.")
+            return {
+                'error': 'Enterprise features not available',
+                'optimization_result': OptimizationResult(
+                    timestamp=datetime.now(),
+                    total_monthly_savings=0,
+                    total_annual_savings=0,
+                    ec2_savings=0,
+                    network_savings=0,
+                    s3_savings=0,
+                    ri_savings=0,
+                    anomalies_detected=0,
+                    recommendations_count=0,
+                    auto_remediation_tasks=0,
+                    execution_time=0,
+                    details={}
+                )
+            }
         
         # Create enterprise config from existing config
         enterprise_config = EnterpriseConfig(

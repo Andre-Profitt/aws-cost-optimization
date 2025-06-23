@@ -245,7 +245,6 @@ def compliance_report(ctx, start_date, end_date, output):
         return
     
     # Parse dates
-    from datetime import datetime
     start = datetime.fromisoformat(start_date) if start_date else None
     end = datetime.fromisoformat(end_date) if end_date else None
     
@@ -276,7 +275,6 @@ def audit_trail(ctx, start_date, end_date, user, event_type, format, output):
         return
     
     # Parse dates
-    from datetime import datetime
     start = datetime.fromisoformat(start_date) if start_date else None
     end = datetime.fromisoformat(end_date) if end_date else None
     
@@ -354,7 +352,11 @@ def enterprise_analyze(ctx, regions, services, user, output):
 @click.pass_context
 def execute_changes(ctx, dry_run, force):
     """Execute approved enterprise change requests"""
-    from .enterprise import EnterpriseConfig, EnterpriseOptimizer
+    try:
+        from .enterprise import EnterpriseConfig, EnterpriseOptimizer
+    except ImportError:
+        click.echo("❌ Enterprise module not available. Please ensure enterprise features are installed.", err=True)
+        return
     
     mode = "DRY RUN" if dry_run else "EXECUTE"
     click.echo(f"🚀 {mode}: Executing approved changes...")

@@ -180,18 +180,22 @@ class PeriodicResourceDetector:
         dimension_name = dimension_map.get(resource_type.lower(), 'InstanceId')
         
         # Fetch metric statistics
-        response = self.cloudwatch.get_metric_statistics(
-            Namespace=namespace,
-            MetricName=metric_name,
-            Dimensions=[{
-                'Name': dimension_name,
-                'Value': resource_id
-            }],
-            StartTime=start_time,
-            EndTime=end_time,
-            Period=3600,  # 1 hour granularity
-            Statistics=['Maximum', 'Average']
-        )
+        try:
+            response = self.cloudwatch.get_metric_statistics(
+                Namespace=namespace,
+                MetricName=metric_name,
+                Dimensions=[{
+                    'Name': dimension_name,
+                    'Value': resource_id
+                }],
+                StartTime=start_time,
+                EndTime=end_time,
+                Period=3600,  # 1 hour granularity
+                Statistics=['Maximum', 'Average']
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch CloudWatch metrics for {resource_id}: {e}")
+            return pd.Series()
         
         # Convert to pandas series for analysis
         if not response['Datapoints']:
@@ -631,7 +635,10 @@ class PeriodicResourceDetector:
             # Conditional formatting for risk scores
             for row in range(2, len(df) + 2):
                 risk_cell = worksheet[f'D{row}']
-                risk_value = float(risk_cell.value)
+                if risk_cell.value is not None and str(risk_cell.value).replace('.', '').replace('-', '').isdigit():
+                    risk_value = float(risk_cell.value)
+                else:
+                    continue
                 
                 if risk_value >= 0.8:
                     risk_cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
